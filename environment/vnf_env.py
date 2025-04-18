@@ -1,13 +1,10 @@
 import numpy as np
 import networkx as nx
-from typing import List, Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional
 from collections import deque
-from enum import Enum
 import gymnasium as gym
 from gymnasium import spaces
-
-from ..models.vnf import VNF
-from .network_slice import NetworkSlice, SliceType
+from environment.network_slice import NetworkSlice, SliceType, VNF
 
 
 class VNFPlacementEnv(gym.Env):
@@ -16,6 +13,9 @@ class VNFPlacementEnv(gym.Env):
         self.topology = topology
         self.max_slices = max_slices
         self.current_slices: List[NetworkSlice] = []
+
+        # Calculate maximum possible energy per step
+        self.max_energy_per_step = self._calculate_max_energy_step()
 
         # Define action and observation spaces
         self.action_space = spaces.Discrete(len(topology.nodes()))
@@ -28,16 +28,22 @@ class VNFPlacementEnv(gym.Env):
                 "current_slice": spaces.Dict(
                     {
                         "slice_type": spaces.Discrete(len(SliceType)),
-                        "qos": spaces.Box(
-                            low=0, high=np.inf, shape=(3,)
-                        ),  # latency, edge_latency, bandwidth
-                        "vnfs_placed": spaces.Discrete(10),  # Max VNFs per slice
+                        "qos": spaces.Box(low=0, high=np.inf, shape=(3,)),
+                        "vnfs_placed": spaces.Discrete(10),
                     }
                 ),
             }
         )
 
         self.reset()
+
+    def _calculate_max_energy_step(self) -> float:
+        """Calculate maximum possible energy increase from a single placement"""
+        max_energy = max(
+            data["energy_per_vcpu"] * data["cpu_limit"]
+            for _, data in self.topology.nodes(data=True)
+        )
+        return max_energy * 1.1  # Add 10% margin
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -50,43 +56,42 @@ class VNFPlacementEnv(gym.Env):
         reward = 0
         terminated = False
         truncated = False
-
-        # Get current slice being placed
         current_slice = self.current_slices[-1] if self.current_slices else None
 
         if current_slice:
-            # Place VNF on selected node
-            vnf_to_place = current_slice.vnf_list[len(current_slice.path or [])]
+            current_vnf_idx = len(current_slice.path or [])
+            if current_vnf_idx >= len(current_slice.vnf_list):
+                return self._get_observation(), 0, True, False, {}
+
+            current_vnf = current_slice.vnf_list[current_vnf_idx]
             target_node = list(self.topology.nodes())[action]
 
-            # Validate placement
-            if self._validate_placement(target_node, vnf_to_place):
-                # Update node resources
-                self.topology.nodes[target_node]["cpu_usage"] += vnf_to_place.vcpu_usage
+            if self._validate_placement(target_node, current_vnf):
+                # Valid placement
+                energy_increase = (
+                    self.topology.nodes[target_node]["energy_per_vcpu"]
+                    * current_vnf.vcpu_usage
+                )
+                reward = -energy_increase
+
+                # Update resources
+                self.topology.nodes[target_node]["cpu_usage"] += current_vnf.vcpu_usage
                 if not current_slice.path:
                     current_slice.path = [target_node]
                 else:
                     current_slice.path.append(target_node)
 
-                # Calculate reward (negative of energy increase)
-                energy_increase = (
-                    self.topology.nodes[target_node]["energy_per_vcpu"]
-                    * vnf_to_place.vcpu_usage
-                )
-                reward = -energy_increase
-
                 # Check if slice placement is complete
                 if len(current_slice.path) == len(current_slice.vnf_list):
                     terminated = True
-                    # Additional reward for meeting QoS
                     if current_slice.validate_vnf_placement(self.topology):
-                        reward += 10
+                        reward += 10  # Bonus for QoS compliance
             else:
-                reward = -5  # Penalty for invalid placement
+                # Invalid placement - terminate episode with penalty
+                reward = -self.max_energy_per_step
+                terminated = True
 
-        # Update observation
-        observation = self._get_observation()
-        return observation, reward, terminated, truncated, {}
+        return self._get_observation(), reward, terminated, truncated, {}
 
     def _validate_placement(self, node: int, vnf: VNF) -> bool:
         """Check if VNF can be placed on node"""

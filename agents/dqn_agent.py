@@ -21,6 +21,7 @@ class DQNAgent:
         batch_size: int = 64,
         target_update: int = 10,
     ):
+        self.invalid_penalty = 0
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.policy_net = DQN(state_shape, n_actions).to(self.device)
