@@ -3,9 +3,9 @@ import torch
 import networkx as nx
 from typing import List
 
-from ..environment.network_slice import NetworkSlice
-from ..agents.dqn_agent import DQNAgent
-from ..agents.baseline_agents import RandomAgent, GreedyAgent, RoundRobinAgent
+from environment.network_slice import NetworkSlice
+from agents.dqn_agent import DQNAgent
+from agents.baseline_agents import RandomAgent, GreedyAgent, RoundRobinAgent
 
 
 class Evaluator:

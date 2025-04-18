@@ -4,7 +4,7 @@ from typing import Dict
 from collections import deque
 import random
 
-from ..models.dqn import DQN, ReplayBuffer
+from models.dqn import DQN, ReplayBuffer
 
 
 class DQNAgent:
@@ -65,14 +65,12 @@ class DQNAgent:
             self.batch_size
         )
 
-        # Convert to tensors
-        state_batch = states  # List of dicts, handled in network
-        action_batch = (
-            torch.tensor(actions, dtype=torch.long).unsqueeze(1).to(self.device)
-        )
-        reward_batch = torch.tensor(rewards, dtype=torch.float).to(self.device)
-        next_state_batch = next_states  # List of dicts
-        done_batch = torch.tensor(dones, dtype=torch.float).to(self.device)
+        # Convert to tensors - now handles dict states properly
+        state_batch = states  # Pass directly to network
+        action_batch = torch.tensor(actions, dtype=torch.long).unsqueeze(1)
+        reward_batch = torch.tensor(rewards, dtype=torch.float)
+        next_state_batch = next_states  # Pass directly
+        done_batch = torch.tensor(dones, dtype=torch.float)
 
         # Compute Q(s_t, a)
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)

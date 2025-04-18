@@ -21,19 +21,34 @@ class DQN(nn.Module):
 
         self.relu = nn.ReLU()
 
-    def forward(self, state: dict) -> torch.Tensor:
-        # Flatten state
-        cpu_usage = torch.FloatTensor(state["cpu_usage"])
-        bw_usage = torch.FloatTensor(state["bandwidth_usage"])
-        slice_info = torch.FloatTensor(
-            [
-                state["current_slice"]["slice_type"],
-                *state["current_slice"]["qos"],
-                state["current_slice"]["vnfs_placed"],
-            ]
-        )
+    def forward(self, x):
+        """Handle both batch and single state inputs"""
+        if isinstance(x, tuple):  # Batch from replay buffer
+            # Convert tuple of dicts to dict of tensors
+            cpu_usage = torch.FloatTensor([s["cpu_usage"] for s in x])
+            bw_usage = torch.FloatTensor([s["bandwidth_usage"] for s in x])
+            slice_info = torch.FloatTensor(
+                [
+                    [
+                        s["current_slice"]["slice_type"],
+                        *s["current_slice"]["qos"],
+                        s["current_slice"]["vnfs_placed"],
+                    ]
+                    for s in x
+                ]
+            )
+        else:  # Single state
+            cpu_usage = torch.FloatTensor(x["cpu_usage"])
+            bw_usage = torch.FloatTensor(x["bandwidth_usage"])
+            slice_info = torch.FloatTensor(
+                [
+                    x["current_slice"]["slice_type"],
+                    *x["current_slice"]["qos"],
+                    x["current_slice"]["vnfs_placed"],
+                ]
+            )
 
-        x = torch.cat([cpu_usage, bw_usage, slice_info])
+        x = torch.cat([cpu_usage, bw_usage, slice_info], dim=-1)
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
         return self.fc3(x)

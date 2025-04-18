@@ -2,9 +2,7 @@ import random
 import numpy as np
 from typing import List
 import networkx as nx
-
-from ..environment.network_slice import NetworkSlice
-from ..models.vnf import VNF
+from environment.network_slice import NetworkSlice, VNF
 
 
 class RandomAgent:

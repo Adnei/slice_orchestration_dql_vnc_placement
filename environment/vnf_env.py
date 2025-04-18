@@ -1,6 +1,6 @@
 import numpy as np
 import networkx as nx
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Union
 from collections import deque
 import gymnasium as gym
 from gymnasium import spaces
@@ -113,46 +113,57 @@ class VNFPlacementEnv(gym.Env):
 
         return True
 
-    def _get_observation(self) -> Dict:
-        """Return current state observation"""
-        # Normalize resource usage
-        cpu_usage = np.array(
-            [
-                self.topology.nodes[node]["cpu_usage"]
-                / self.topology.nodes[node]["cpu_limit"]
-                for node in self.topology.nodes()
-            ]
-        )
+    def _get_observation(self) -> Dict[str, Union[np.ndarray, Dict]]:
+        """Returns the current environment observation as a structured dictionary.
 
-        bandwidth_usage = np.array(
-            [
-                self.topology.edges[edge]["link_usage"]
-                / self.topology.edges[edge]["link_capacity"]
-                for edge in self.topology.edges()
-            ]
-        )
+        Ensures:
+        - All arrays are float32 for PyTorch compatibility
+        - Values are properly normalized [0,1] where applicable
+        - Consistent structure for both single and batched processing
+        """
+        # Normalized CPU usage (0-1 scale)
+        cpu_usage = np.zeros(len(self.topology.nodes), dtype=np.float32)
+        for i, node in enumerate(self.topology.nodes()):
+            cpu_capacity = self.topology.nodes[node]["cpu_limit"]
+            cpu_usage[i] = self.topology.nodes[node]["cpu_usage"] / max(
+                cpu_capacity, 1e-6
+            )  # Avoid division by zero
 
-        # Current slice info
-        current_slice_info = {"slice_type": 0, "qos": np.zeros(3), "vnfs_placed": 0}
+        # Normalized bandwidth usage (0-1 scale)
+        bandwidth_usage = np.zeros(len(self.topology.edges()), dtype=np.float32)
+        for i, edge in enumerate(self.topology.edges()):
+            link_capacity = self.topology.edges[edge]["link_capacity"]
+            bandwidth_usage[i] = self.topology.edges[edge]["link_usage"] / max(
+                link_capacity, 1e-6
+            )
 
+        # Current slice information
         if self.current_slices:
             current_slice = self.current_slices[-1]
-            current_slice_info = {
-                "slice_type": list(SliceType).index(current_slice.slice_type),
+            slice_info = {
+                "slice_type": int(current_slice.slice_type.value),  # Enum to int
                 "qos": np.array(
                     [
                         current_slice.qos.max_latency,
-                        current_slice.qos.edge_latency or 0,
+                        current_slice.qos.edge_latency or 0.0,
                         current_slice.qos.min_bandwidth,
-                    ]
+                    ],
+                    dtype=np.float32,
                 ),
-                "vnfs_placed": len(current_slice.path or []),
+                "vnfs_placed": len(current_slice.path) if current_slice.path else 0,
+            }
+        else:
+            # Default values when no active slice
+            slice_info = {
+                "slice_type": 0,
+                "qos": np.array([0.0, 0.0, 0.0], dtype=np.float32),
+                "vnfs_placed": 0,
             }
 
         return {
             "cpu_usage": cpu_usage,
             "bandwidth_usage": bandwidth_usage,
-            "current_slice": current_slice_info,
+            "current_slice": slice_info,
         }
 
     def _update_resource_usage(self):
