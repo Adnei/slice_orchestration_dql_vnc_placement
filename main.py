@@ -8,8 +8,6 @@ from agents.dqn_agent import DQNAgent
 from environment.network_slice import NetworkSlice, QoS, SliceType, VNF
 from environment.barabasi_network_generator import NetworkTopologyGenerator
 
-# from environment.network_topology_generator import NetworkTopologyGenerator
-
 
 class TrainingMetrics:
     def __init__(self):
@@ -17,12 +15,16 @@ class TrainingMetrics:
         self.energy_consumptions = []
         self.invalid_actions = []
         self.qos_violations = []
+        self.successful_placements = 0
 
-    def update(self, episode_reward, energy, invalid_count, qos_violated):
+    def update(
+        self, episode_reward, energy, invalid_count, qos_violated, success_count=0
+    ):
         self.episode_rewards.append(episode_reward)
         self.energy_consumptions.append(energy)
         self.invalid_actions.append(invalid_count)
         self.qos_violations.append(qos_violated)
+        self.successful_placements += success_count
 
     def plot(self):
         plt.figure(figsize=(15, 10))
@@ -53,15 +55,21 @@ class TrainingMetrics:
 
         plt.tight_layout()
         plt.savefig("training_metrics.png")
-        plt.show()
+        plt.close()
 
 
-def create_sample_slices(topology: nx.Graph, n_slices: int = 2) -> List[NetworkSlice]:
+def create_sample_slices(
+    topology: nx.Graph,
+    n_slices: int = 2,
+    valid_slice_types: list[SliceType] = list(SliceType),
+) -> List[NetworkSlice]:
     slices = []
-    ran_nodes = [n for n in topology.nodes() if topology.nodes[n]["type"] == "RAN"]
+    ran_nodes = [
+        node for node in topology.nodes() if topology.nodes[node]["type"] == "RAN"
+    ]
 
     for i in range(n_slices):
-        slice_type = random.choice(list(SliceType))
+        slice_type = random.choice(valid_slice_types)
 
         if slice_type == SliceType.URLLC:
             qos = QoS(qos_id=i, max_latency=100, edge_latency=50, min_bandwidth=5)
@@ -73,14 +81,18 @@ def create_sample_slices(topology: nx.Graph, n_slices: int = 2) -> List[NetworkS
             qos = QoS(qos_id=i, max_latency=300, min_bandwidth=2)
             vnf_cpu = random.randint(1, 2)
 
-        slice = NetworkSlice(
-            slice_id=i, slice_type=slice_type, qos=qos, origin=random.choice(ran_nodes)
+        origin = random.choice(ran_nodes)
+        network_slice = NetworkSlice(
+            slice_id=i,
+            slice_type=slice_type,
+            qos=qos,
+            origin=origin,
         )
 
         for vnf_type in ["RAN", "Edge", "Transport", "Core"]:
-            slice.add_vnf(
+            network_slice.add_vnf(
                 VNF(
-                    vnf_id=len(slice.vnf_list),
+                    vnf_id=len(network_slice.vnf_list),
                     delay=random.uniform(0.1, 0.5),
                     vnf_type=vnf_type,
                     vcpu_usage=vnf_cpu,
@@ -90,19 +102,17 @@ def create_sample_slices(topology: nx.Graph, n_slices: int = 2) -> List[NetworkS
                 )
             )
 
-        slices.append(slice)
+        slices.append(network_slice)
 
     return slices
 
 
 def train_dqn_agent():
-    # Initialize metrics tracker
     metrics = TrainingMetrics()
 
-    # Generate network topology
-    topology_generator = NetworkTopologyGenerator(n_nodes=100, avg_degree=4)
+    # Initialize network topology
+    topology_generator = NetworkTopologyGenerator(n_nodes=50)
     topology = topology_generator.get_graph()
-    topology_generator.draw()
 
     # Create environment
     env = VNFPlacementEnv(topology)
@@ -123,77 +133,91 @@ def train_dqn_agent():
 
     # Training parameters
     n_episodes = 5000
-    batch_size = 64
     print_interval = 50
 
     for episode in range(n_episodes):
-        # Generate new slices for this episode
-
-        # Disabling URLLC for now
-        slices = create_sample_slices(topology, n_slices=2)
-
-        # Gradually increase difficulty
-        if episode > 200 and episode % 100 == 0:
-            n_slices = min(5, 2 + episode // 200)
-            slices = create_sample_slices(topology, n_slices=n_slices)
+        # Dynamic difficulty adjustment
+        n_slices = 2 + (episode // 1000)  # Increase every 1000 episodes
+        slices = create_sample_slices(topology, n_slices=n_slices)
 
         episode_reward = 0
         episode_energy = 0
         invalid_action_count = 0
         qos_violated = 0
+        successful_placements = 0
 
         for slice in slices:
-            # Reset environment for new slice
             state, _ = env.reset()
             env.add_slice(slice)
 
+            # Get initial valid nodes
+            current_vnf_idx = 0
+            valid_nodes = [
+                node
+                for node in topology.nodes()
+                if (
+                    topology.nodes[node]["type"]
+                    == slice.vnf_list[current_vnf_idx].vnf_type
+                    and (
+                        topology.nodes[node]["cpu_usage"]
+                        + slice.vnf_list[current_vnf_idx].vcpu_usage
+                    )
+                    <= topology.nodes[node]["cpu_limit"]
+                )
+            ]
+
+            if not valid_nodes:
+                invalid_action_count += 1
+                continue
+
             terminated = False
             while not terminated:
-                # Get valid nodes for current VNF
-                current_vnf_idx = len(slice.path or [])
-                if current_vnf_idx >= len(slice.vnf_list):
-                    break
-
-                current_vnf = slice.vnf_list[current_vnf_idx]
-                valid_nodes = [
-                    node
-                    for node in topology.nodes()
-                    if (
-                        topology.nodes[node]["type"] == current_vnf.vnf_type
-                        and (topology.nodes[node]["cpu_usage"] + current_vnf.vcpu_usage)
-                        <= topology.nodes[node]["cpu_limit"]
-                    )
-                ]
-
-                if not valid_nodes:
-                    invalid_action_count += 1
-                    break
-
-                # Select action
                 action = agent.select_action(state, valid_nodes)
+                next_state, reward, terminated, _, _ = env.step(action)
 
-                # Take action
-                next_state, reward, terminated, truncated, _ = env.step(action)
+                if action == -1:  # No valid nodes
+                    invalid_action_count += 1
+                    terminated = True
+                    continue
+
                 episode_reward += reward
 
-                # Track invalid actions from rewards
-                if reward == -env.max_energy_per_step:
-                    invalid_action_count += 1
-
-                # Store transition in memory
+                # Store experience
                 agent.memory.push(state, action, reward, next_state, terminated)
-
-                # Move to next state
-                state = next_state
 
                 # Optimize model
                 loss = agent.optimize_model()
 
-            # Check QoS after placement
-            if slice.path and not slice.validate_vnf_placement(topology):
-                qos_violated += 1
+                # Move to next state
+                state = next_state
 
-            # Calculate energy for this slice
+                # Update valid nodes for next VNF if not terminated
+                if not terminated:
+                    current_vnf_idx = len(slice.path)
+                    valid_nodes = [
+                        node
+                        for node in topology.nodes()
+                        if (
+                            topology.nodes[node]["type"]
+                            == slice.vnf_list[current_vnf_idx].vnf_type
+                            and (
+                                topology.nodes[node]["cpu_usage"]
+                                + slice.vnf_list[current_vnf_idx].vcpu_usage
+                            )
+                            <= topology.nodes[node]["cpu_limit"]
+                            and (
+                                not slice.path
+                                or topology.has_edge(slice.path[-1], node)
+                            )
+                        )
+                    ]
+
+            # Update metrics after slice placement
+            if slice.path and len(slice.path) == len(slice.vnf_list):
+                successful_placements += 1
+                if not slice.validate_vnf_placement(topology):
+                    qos_violated += 1
+
             episode_energy += sum(
                 topology.nodes[node]["energy_base"]
                 + topology.nodes[node]["energy_per_vcpu"]
@@ -201,12 +225,17 @@ def train_dqn_agent():
                 for node in slice.path or []
             )
 
-        # Update metrics
+        # Update metrics and agent's reward history
         metrics.update(
-            episode_reward, episode_energy, invalid_action_count, qos_violated
+            episode_reward,
+            episode_energy,
+            invalid_action_count,
+            qos_violated,
+            successful_placements,
         )
+        agent.update_reward_history(episode_reward)
 
-        # Evaluation and logging
+        # Logging
         if episode % print_interval == 0:
             avg_reward = np.mean(metrics.episode_rewards[-print_interval:])
             avg_energy = np.mean(metrics.energy_consumptions[-print_interval:])
@@ -215,12 +244,11 @@ def train_dqn_agent():
                 f"Avg Reward: {avg_reward:.2f} | "
                 f"Avg Energy: {avg_energy:.2f} | "
                 f"Invalid Actions: {invalid_action_count} | "
-                f"QoS Violations: {qos_violated}"
+                f"QoS Violations: {qos_violated} | "
+                f"Successful: {successful_placements}/{n_slices}"
             )
 
-        agent.update_reward_history(episode_reward)
-
-    # Save trained agent and metrics
+    # Save results
     agent.save("dqn_agent.pth")
     metrics.plot()
 

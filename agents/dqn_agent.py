@@ -42,17 +42,14 @@ class DQNAgent:
 
     def select_action(self, state: Dict, valid_nodes: list) -> int:
         if not valid_nodes:
-            return -1  # Indicate no valid nodes
+            return -1  # Special value indicating no valid nodes
 
-        self.steps_done += 1
+        # Adaptive exploration based on valid nodes
+        explore_prob = self.epsilon
+        if len(valid_nodes) < 3:
+            explore_prob = max(self.epsilon, 0.5)  # Explore more with few options
 
-        # Adaptive epsilon based on recent performance
-        if len(self.last_100_rewards) == 100 and np.mean(self.last_100_rewards) < -1.0:
-            self.epsilon = min(
-                0.5, self.epsilon * 1.2
-            )  # Boost exploration if struggling
-
-        if random.random() < self.epsilon:
+        if random.random() < explore_prob:
             return random.choice(valid_nodes)
 
         with torch.no_grad():
@@ -107,6 +104,26 @@ class DQNAgent:
 
     def update_reward_history(self, reward):
         self.last_100_rewards.append(reward)
+
+    def save(self, path: str):
+        torch.save(
+            {
+                "policy_state_dict": self.policy_net.state_dict(),
+                "target_state_dict": self.target_net.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "epsilon": self.epsilon,
+                "steps_done": self.steps_done,
+            },
+            path,
+        )
+
+    def load(self, path: str):
+        checkpoint = torch.load(path)
+        self.policy_net.load_state_dict(checkpoint["policy_state_dict"])
+        self.target_net.load_state_dict(checkpoint["target_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.epsilon = checkpoint["epsilon"]
+        self.steps_done = checkpoint["steps_done"]
 
     def save(self, path: str):
         torch.save(
