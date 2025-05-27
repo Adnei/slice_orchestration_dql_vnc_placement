@@ -13,6 +13,11 @@ class VNFPlacementEnv(gym.Env):
         self.topology = topology
         self.max_slices = max_slices
         self.current_slices: List[NetworkSlice] = []
+        self.slice_type_mapping = {
+            SliceType.URLLC: 0,
+            SliceType.EMBB: 1,
+            SliceType.MMTC: 2,
+        }
 
         # Calculate maximum possible energy per step
         self.max_energy_per_step = self._calculate_max_energy_step()
@@ -141,7 +146,7 @@ class VNFPlacementEnv(gym.Env):
         if self.current_slices:
             current_slice = self.current_slices[-1]
             slice_info = {
-                "slice_type": int(current_slice.slice_type.value),  # Enum to int
+                "slice_type": self._slice_type_to_int(current_slice.slice_type),
                 "qos": np.array(
                     [
                         current_slice.qos.max_latency,
@@ -165,6 +170,14 @@ class VNFPlacementEnv(gym.Env):
             "bandwidth_usage": bandwidth_usage,
             "current_slice": slice_info,
         }
+
+    def _slice_type_to_int(self, slice_type: SliceType) -> int:
+        """Convert SliceType enum to integer representation"""
+        return self.slice_type_mapping[slice_type]
+
+    def _int_to_slice_type(self, val: int) -> SliceType:
+        """Reverse mapping"""
+        return [SliceType.URLLC, SliceType.EMBB, SliceType.MMTC][val]
 
     def _update_resource_usage(self):
         """Update link bandwidth usage based on placed slices"""

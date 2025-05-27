@@ -1,13 +1,17 @@
-from enum import Enum
+from enum import Enum, auto
 from dataclasses import dataclass
 from typing import List, Optional
 
 
+#     URLLC = "URLLC"  # Ultra-Reliable Low Latency Communications
+#     EMBB = "eMBB"  # Enhanced Mobile Broadband
+#     MMTC = "mMTC"  # Massive Machine Type Communications
+#     GENERIC = "GENERIC"
 class SliceType(Enum):
-    URLLC = "URLLC"  # Ultra-Reliable Low Latency Communications
-    EMBB = "eMBB"  # Enhanced Mobile Broadband
-    MMTC = "mMTC"  # Massive Machine Type Communications
-    GENERIC = "GENERIC"
+    URLLC = auto()
+    EMBB = auto()
+    MMTC = auto()
+    GENERIC = auto()
 
 
 @dataclass
