@@ -70,13 +70,13 @@ def create_sample_slices(
         slice_type = random.choice(valid_slice_types)
 
         if slice_type == SliceType.URLLC:
-            qos = QoS(qos_id=i, max_latency=1.0, edge_latency=0.5, min_bandwidth=20)
+            qos = QoS(qos_id=i, max_latency=500, edge_latency=1000, min_bandwidth=0)
             vnf_cpu = random.randint(1, 2)  # Lower CPU for URLLC
         elif slice_type == SliceType.EMBB:
-            qos = QoS(qos_id=i, max_latency=10.0, min_bandwidth=20)
+            qos = QoS(qos_id=i, max_latency=500, min_bandwidth=0)
             vnf_cpu = random.randint(1, 2)
         else:  # mMTC or GENERIC
-            qos = QoS(qos_id=i, max_latency=100.0, min_bandwidth=10)
+            qos = QoS(qos_id=i, max_latency=500.0, min_bandwidth=0)
             vnf_cpu = random.randint(1, 2)
 
         origin = random.choice(ran_nodes)
@@ -111,8 +111,9 @@ def train_dqn_agent():
     metrics = TrainingMetrics()
 
     # Generate network topology
-    topology_generator = NetworkTopologyGenerator(n_nodes=50, avg_degree=4)
+    topology_generator = NetworkTopologyGenerator(n_nodes=100, avg_degree=4)
     topology = topology_generator.get_graph()
+    topology_generator.draw()
 
     # Create environment
     env = VNFPlacementEnv(topology)
@@ -120,7 +121,9 @@ def train_dqn_agent():
     # Create DQN agent
     state_shape = (len(topology.nodes()), len(topology.edges()))
     n_actions = len(topology.nodes())
-    agent = DQNAgent(state_shape, n_actions)
+    agent = DQNAgent(
+        state_shape, n_actions, epsilon_start=0.8, epsilon_end=0.2, epsilon_decay=0.998
+    )
 
     # Training parameters
     n_episodes = 1000
@@ -131,7 +134,7 @@ def train_dqn_agent():
         # Generate new slices for this episode
 
         # Disabling URLLC for now
-        slices = create_sample_slices(topology, n_slices=3)
+        slices = create_sample_slices(topology, n_slices=2)
 
         episode_reward = 0
         episode_energy = 0
