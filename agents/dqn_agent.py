@@ -1,4 +1,3 @@
-# agents/dqn_agent.py
 import torch
 import numpy as np
 from typing import Dict
@@ -12,14 +11,14 @@ class DQNAgent:
         self,
         state_shape: tuple,
         n_actions: int,
-        lr: float = 0.001,
+        lr: float = 0.0005,
         gamma: float = 0.99,
-        epsilon_start: float = 1.0,
-        epsilon_end: float = 0.01,
-        epsilon_decay: float = 0.995,
+        epsilon_start: float = 0.9,
+        epsilon_end: float = 0.05,
+        epsilon_decay: float = 0.992,
         buffer_size: int = 10000,
-        batch_size: int = 64,
-        target_update: int = 10,
+        batch_size: int = 128,
+        target_update: int = 100,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.n_actions = n_actions
@@ -39,51 +38,50 @@ class DQNAgent:
         self.batch_size = batch_size
         self.target_update = target_update
         self.steps_done = 0
+        self.last_100_rewards = deque(maxlen=100)
 
     def select_action(self, state: Dict, valid_nodes: list) -> int:
         if not valid_nodes:
-            return -1  # Special value to indicate no valid nodes
+            return -1  # Indicate no valid nodes
+
+        self.steps_done += 1
+
+        # Adaptive epsilon based on recent performance
+        if len(self.last_100_rewards) == 100 and np.mean(self.last_100_rewards) < -1.0:
+            self.epsilon = min(
+                0.5, self.epsilon * 1.2
+            )  # Boost exploration if struggling
 
         if random.random() < self.epsilon:
             return random.choice(valid_nodes)
 
         with torch.no_grad():
-            q_values = self.policy_net(state).cpu().numpy()[0]  # [n_actions]
+            q_values = self.policy_net(state).cpu().numpy()[0]
             valid_q_values = {node: q_values[node] for node in valid_nodes}
             return max(valid_q_values.items(), key=lambda x: x[1])[0]
 
     def optimize_model(self):
         if len(self.memory) < self.batch_size:
-            return
+            return None
 
-        # Sample from replay buffer
         states, actions, rewards, next_states, dones = self.memory.sample(
             self.batch_size
         )
 
         # Convert to tensors
-        state_batch = states  # Pass directly to network
-        action_batch = (
-            torch.tensor(actions, dtype=torch.long).unsqueeze(1).to(self.device)
-        )
-        reward_batch = torch.tensor(rewards, dtype=torch.float).to(self.device)
-        next_state_batch = next_states  # Pass directly
-        done_batch = torch.tensor(dones, dtype=torch.float).to(self.device)
+        rewards = torch.FloatTensor(rewards).to(self.device)
+        dones = torch.FloatTensor(dones).to(self.device)
+        actions = torch.LongTensor(actions).unsqueeze(1).to(self.device)
 
-        # Compute Q(s_t, a) - squeeze to remove batch dimension if needed
-        state_action_values = (
-            self.policy_net(state_batch).gather(1, action_batch).squeeze(1)
-        )
+        # Current Q values
+        state_action_values = self.policy_net(states).gather(1, actions).squeeze(1)
 
-        # Compute V(s_{t+1})
-        next_state_values = torch.zeros(self.batch_size, device=self.device)
+        # Expected Q values
         with torch.no_grad():
-            next_state_values = self.target_net(next_state_batch).max(1)[0]
-
-        # Compute expected Q values
-        expected_state_action_values = (
-            next_state_values * self.gamma * (1 - done_batch)
-        ) + reward_batch
+            next_state_values = self.target_net(next_states).max(1)[0]
+            expected_state_action_values = (
+                rewards + (1 - dones) * self.gamma * next_state_values
+            )
 
         # Compute loss
         loss = torch.nn.functional.mse_loss(
@@ -93,6 +91,9 @@ class DQNAgent:
         # Optimize
         self.optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(
+            self.policy_net.parameters(), 1.0
+        )  # Gradient clipping
         self.optimizer.step()
 
         # Update epsilon
@@ -103,6 +104,9 @@ class DQNAgent:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
         return loss.item()
+
+    def update_reward_history(self, reward):
+        self.last_100_rewards.append(reward)
 
     def save(self, path: str):
         torch.save(

@@ -56,52 +56,41 @@ class TrainingMetrics:
         plt.show()
 
 
-def create_sample_slices(
-    topology: nx.Graph,
-    n_slices: int = 10,
-    valid_slice_types: list[SliceType] = list(SliceType),
-) -> List[NetworkSlice]:
+def create_sample_slices(topology: nx.Graph, n_slices: int = 2) -> List[NetworkSlice]:
     slices = []
-    ran_nodes = [
-        node for node in topology.nodes() if topology.nodes[node]["type"] == "RAN"
-    ]
+    ran_nodes = [n for n in topology.nodes() if topology.nodes[n]["type"] == "RAN"]
 
     for i in range(n_slices):
-        slice_type = random.choice(valid_slice_types)
+        slice_type = random.choice(list(SliceType))
 
         if slice_type == SliceType.URLLC:
-            qos = QoS(qos_id=i, max_latency=500, edge_latency=1000, min_bandwidth=0)
-            vnf_cpu = random.randint(1, 2)  # Lower CPU for URLLC
-        elif slice_type == SliceType.EMBB:
-            qos = QoS(qos_id=i, max_latency=500, min_bandwidth=0)
+            qos = QoS(qos_id=i, max_latency=100, edge_latency=50, min_bandwidth=5)
             vnf_cpu = random.randint(1, 2)
-        else:  # mMTC or GENERIC
-            qos = QoS(qos_id=i, max_latency=500.0, min_bandwidth=0)
+        elif slice_type == SliceType.EMBB:
+            qos = QoS(qos_id=i, max_latency=200, min_bandwidth=10)
+            vnf_cpu = random.randint(1, 2)
+        else:
+            qos = QoS(qos_id=i, max_latency=300, min_bandwidth=2)
             vnf_cpu = random.randint(1, 2)
 
-        origin = random.choice(ran_nodes)
-        network_slice = NetworkSlice(
-            slice_id=i, slice_type=slice_type, qos=qos, origin=origin
+        slice = NetworkSlice(
+            slice_id=i, slice_type=slice_type, qos=qos, origin=random.choice(ran_nodes)
         )
 
-        # Add VNFs with type-specific requirements
-        vnf_types = ["RAN", "Edge", "Transport", "Core"]
-        for vnf_type in vnf_types:
-            network_slice.add_vnf(
+        for vnf_type in ["RAN", "Edge", "Transport", "Core"]:
+            slice.add_vnf(
                 VNF(
-                    vnf_id=len(network_slice.vnf_list),
-                    delay=(
-                        random.uniform(0.1, 0.3)
-                        if slice_type == SliceType.URLLC
-                        else random.uniform(0.2, 0.5)
-                    ),
+                    vnf_id=len(slice.vnf_list),
+                    delay=random.uniform(0.1, 0.5),
                     vnf_type=vnf_type,
                     vcpu_usage=vnf_cpu,
-                    bandwidth_usage=qos.min_bandwidth * random.uniform(0.1, 0.3),
+                    bandwidth_usage=max(
+                        1, qos.min_bandwidth * random.uniform(0.1, 0.3)
+                    ),
                 )
             )
 
-        slices.append(network_slice)
+        slices.append(slice)
 
     return slices
 
@@ -122,11 +111,18 @@ def train_dqn_agent():
     state_shape = (len(topology.nodes()), len(topology.edges()))
     n_actions = len(topology.nodes())
     agent = DQNAgent(
-        state_shape, n_actions, epsilon_start=0.8, epsilon_end=0.2, epsilon_decay=0.998
+        state_shape,
+        n_actions,
+        lr=0.0005,
+        epsilon_start=0.9,
+        epsilon_end=0.05,
+        epsilon_decay=0.992,
+        batch_size=128,
+        target_update=100,
     )
 
     # Training parameters
-    n_episodes = 1000
+    n_episodes = 5000
     batch_size = 64
     print_interval = 50
 
@@ -135,6 +131,11 @@ def train_dqn_agent():
 
         # Disabling URLLC for now
         slices = create_sample_slices(topology, n_slices=2)
+
+        # Gradually increase difficulty
+        if episode > 200 and episode % 100 == 0:
+            n_slices = min(5, 2 + episode // 200)
+            slices = create_sample_slices(topology, n_slices=n_slices)
 
         episode_reward = 0
         episode_energy = 0
@@ -216,6 +217,8 @@ def train_dqn_agent():
                 f"Invalid Actions: {invalid_action_count} | "
                 f"QoS Violations: {qos_violated}"
             )
+
+        agent.update_reward_history(episode_reward)
 
     # Save trained agent and metrics
     agent.save("dqn_agent.pth")
