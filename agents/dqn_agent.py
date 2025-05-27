@@ -41,21 +41,16 @@ class DQNAgent:
         self.steps_done = 0
 
     def select_action(self, state: Dict, valid_nodes: list) -> int:
-        self.steps_done += 1
+        if not valid_nodes:
+            return -1  # Special value to indicate no valid nodes
+
         if random.random() < self.epsilon:
             return random.choice(valid_nodes)
 
         with torch.no_grad():
-            # Get Q-values for all nodes (shape: [1, n_actions])
-            q_values = (
-                self.policy_net(state).cpu().numpy()[0]
-            )  # Get first (and only) batch element
-
-            # Filter Q-values for valid nodes only
-            valid_q_values = [q_values[node] for node in valid_nodes]
-
-            # Select node with highest Q-value among valid nodes
-            return valid_nodes[np.argmax(valid_q_values)]
+            q_values = self.policy_net(state).cpu().numpy()[0]  # [n_actions]
+            valid_q_values = {node: q_values[node] for node in valid_nodes}
+            return max(valid_q_values.items(), key=lambda x: x[1])[0]
 
     def optimize_model(self):
         if len(self.memory) < self.batch_size:

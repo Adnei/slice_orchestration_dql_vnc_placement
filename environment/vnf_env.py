@@ -17,6 +17,7 @@ class VNFPlacementEnv(gym.Env):
             SliceType.URLLC: 0,
             SliceType.EMBB: 1,
             SliceType.MMTC: 2,
+            SliceType.GENERIC: 3,
         }
 
         # Calculate maximum possible energy per step
@@ -77,7 +78,7 @@ class VNFPlacementEnv(gym.Env):
                     self.topology.nodes[target_node]["energy_per_vcpu"]
                     * current_vnf.vcpu_usage
                 )
-                reward = -energy_increase
+                reward = -energy_increase * 0.001
 
                 # Update resources
                 self.topology.nodes[target_node]["cpu_usage"] += current_vnf.vcpu_usage
@@ -89,11 +90,13 @@ class VNFPlacementEnv(gym.Env):
                 # Check if slice placement is complete
                 if len(current_slice.path) == len(current_slice.vnf_list):
                     terminated = True
+                    reward += 5
                     if current_slice.validate_vnf_placement(self.topology):
                         reward += 10  # Bonus for QoS compliance
             else:
                 # Invalid placement - terminate episode with penalty
-                reward = -self.max_energy_per_step
+                #                reward = -self.max_energy_per_step
+                reward = -2
                 terminated = True
 
         return self._get_observation(), reward, terminated, truncated, {}

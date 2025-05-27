@@ -70,14 +70,14 @@ def create_sample_slices(
         slice_type = random.choice(valid_slice_types)
 
         if slice_type == SliceType.URLLC:
-            qos = QoS(qos_id=i, max_latency=1.0, edge_latency=0.5, min_bandwidth=100)
+            qos = QoS(qos_id=i, max_latency=1.0, edge_latency=0.5, min_bandwidth=20)
             vnf_cpu = random.randint(1, 2)  # Lower CPU for URLLC
         elif slice_type == SliceType.EMBB:
-            qos = QoS(qos_id=i, max_latency=10.0, min_bandwidth=1000)
-            vnf_cpu = random.randint(2, 4)
+            qos = QoS(qos_id=i, max_latency=10.0, min_bandwidth=20)
+            vnf_cpu = random.randint(1, 2)
         else:  # mMTC or GENERIC
             qos = QoS(qos_id=i, max_latency=100.0, min_bandwidth=10)
-            vnf_cpu = random.randint(1, 3)
+            vnf_cpu = random.randint(1, 2)
 
         origin = random.choice(ran_nodes)
         network_slice = NetworkSlice(
@@ -131,9 +131,7 @@ def train_dqn_agent():
         # Generate new slices for this episode
 
         # Disabling URLLC for now
-        slices = create_sample_slices(
-            topology, n_slices=5, valid_slice_types=[SliceType.EMBB, SliceType.MMTC]
-        )
+        slices = create_sample_slices(topology, n_slices=3)
 
         episode_reward = 0
         episode_energy = 0
