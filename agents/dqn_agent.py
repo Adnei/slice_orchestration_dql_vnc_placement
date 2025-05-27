@@ -1,9 +1,9 @@
+# agents/dqn_agent.py
 import torch
 import numpy as np
 from typing import Dict
 from collections import deque
 import random
-
 from models.dqn import DQN, ReplayBuffer
 
 
@@ -21,8 +21,8 @@ class DQNAgent:
         batch_size: int = 64,
         target_update: int = 10,
     ):
-        self.invalid_penalty = 0
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.n_actions = n_actions
 
         self.policy_net = DQN(state_shape, n_actions).to(self.device)
         self.target_net = DQN(state_shape, n_actions).to(self.device)
@@ -39,7 +39,6 @@ class DQNAgent:
         self.batch_size = batch_size
         self.target_update = target_update
         self.steps_done = 0
-        self.n_actions = n_actions
 
     def select_action(self, state: Dict, valid_nodes: list) -> int:
         self.steps_done += 1
@@ -47,8 +46,10 @@ class DQNAgent:
             return random.choice(valid_nodes)
 
         with torch.no_grad():
-            # Get Q-values for all nodes
-            q_values = self.policy_net(state).cpu().numpy()
+            # Get Q-values for all nodes (shape: [1, n_actions])
+            q_values = (
+                self.policy_net(state).cpu().numpy()[0]
+            )  # Get first (and only) batch element
 
             # Filter Q-values for valid nodes only
             valid_q_values = [q_values[node] for node in valid_nodes]
@@ -65,15 +66,19 @@ class DQNAgent:
             self.batch_size
         )
 
-        # Convert to tensors - now handles dict states properly
+        # Convert to tensors
         state_batch = states  # Pass directly to network
-        action_batch = torch.tensor(actions, dtype=torch.long).unsqueeze(1)
-        reward_batch = torch.tensor(rewards, dtype=torch.float)
+        action_batch = (
+            torch.tensor(actions, dtype=torch.long).unsqueeze(1).to(self.device)
+        )
+        reward_batch = torch.tensor(rewards, dtype=torch.float).to(self.device)
         next_state_batch = next_states  # Pass directly
-        done_batch = torch.tensor(dones, dtype=torch.float)
+        done_batch = torch.tensor(dones, dtype=torch.float).to(self.device)
 
-        # Compute Q(s_t, a)
-        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
+        # Compute Q(s_t, a) - squeeze to remove batch dimension if needed
+        state_action_values = (
+            self.policy_net(state_batch).gather(1, action_batch).squeeze(1)
+        )
 
         # Compute V(s_{t+1})
         next_state_values = torch.zeros(self.batch_size, device=self.device)
@@ -87,7 +92,7 @@ class DQNAgent:
 
         # Compute loss
         loss = torch.nn.functional.mse_loss(
-            state_action_values.squeeze(), expected_state_action_values
+            state_action_values, expected_state_action_values
         )
 
         # Optimize

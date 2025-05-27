@@ -6,7 +6,9 @@ from typing import List
 from environment.vnf_env import VNFPlacementEnv
 from agents.dqn_agent import DQNAgent
 from environment.network_slice import NetworkSlice, QoS, SliceType, VNF
-from environment.network_topology_generator import NetworkTopologyGenerator
+from environment.barabasi_network_generator import NetworkTopologyGenerator
+
+# from environment.network_topology_generator import NetworkTopologyGenerator
 
 
 class TrainingMetrics:
