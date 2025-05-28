@@ -90,7 +90,7 @@ class VNFPlacementEnv(gym.Env):
         if not current_slice.path:
             current_slice.path = []
 
-        # Calculate rewards
+        # Energy cost
         energy_cost = (
             self.topology.nodes[target_node]["energy_base"] * 0.0001
             + self.topology.nodes[target_node]["energy_per_vcpu"]
@@ -98,9 +98,29 @@ class VNFPlacementEnv(gym.Env):
             * 0.00005
         )
 
-        placement_reward = 2.0
-        path_quality = 0.5 if current_slice.path else 0
-        reward = placement_reward + path_quality - energy_cost
+        # Path quality
+        path_quality = 0.5 if current_slice.path else 0.0
+
+        # Latency penalty (approximate)
+        latency_penalty = 0.0
+        if current_slice.path:
+            prev_node = current_slice.path[-1]
+            if self.topology.has_edge(prev_node, target_node):
+                latency_penalty = self.topology.edges[prev_node, target_node]["latency"]
+            else:
+                latency_penalty = 1.0  # penalty for breaking topology
+
+        # Bandwidth efficiency
+        link_bonus = 0.0
+        if current_slice.path and self.topology.has_edge(prev_node, target_node):
+            edge = self.topology.edges[prev_node, target_node]
+            util = edge["link_usage"] / edge["link_capacity"]
+            link_bonus = (1 - util) * 0.2  # favor unused links
+
+        # Base reward
+        reward = 2.0 + path_quality - energy_cost - latency_penalty + link_bonus
+
+        # reward = placement_reward + path_quality - energy_cost
 
         # Update resources
         current_slice.path.append(target_node)
@@ -110,7 +130,7 @@ class VNFPlacementEnv(gym.Env):
         # Completion bonus
         if len(current_slice.path) == len(current_slice.vnf_list):
             qos_met = current_slice.validate_vnf_placement(self.topology)
-            reward += 50.0 if qos_met else -100.0
+            reward += 100.0 if qos_met else -70.0
             return self._get_observation(), reward, True, False, {}
 
         return self._get_observation(), reward, False, False, {}

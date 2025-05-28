@@ -16,6 +16,7 @@ class TrainingMetrics:
         self.invalid_actions = []
         self.qos_violations = []
         self.successful_placements = []
+        self.qos_success_rate = []
 
     def update(
         self, episode_reward, energy, invalid_count, qos_violated, success_count
@@ -25,6 +26,9 @@ class TrainingMetrics:
         self.invalid_actions.append(invalid_count)
         self.qos_violations.append(qos_violated)
         self.successful_placements.append(success_count)
+        self.qos_success_rate.append(
+            (success_count - qos_violated) / max(success_count, 1)
+        )
 
     def plot(self):
         plt.figure(figsize=(15, 10))
