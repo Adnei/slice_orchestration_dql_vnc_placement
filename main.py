@@ -19,9 +19,16 @@ class TrainingMetrics:
         self.qos_violations = []
         self.successful_placements = []
         self.qos_success_rate = []
+        self.num_slices_per_episode = []
 
     def update(
-        self, episode_reward, energy, invalid_count, qos_violated, success_count
+        self,
+        episode_reward,
+        energy,
+        invalid_count,
+        qos_violated,
+        success_count,
+        num_slices,
     ):
         self.episode_rewards.append(episode_reward)
         self.energy_consumptions.append(energy)
@@ -31,6 +38,7 @@ class TrainingMetrics:
         self.qos_success_rate.append(
             (success_count - qos_violated) / max(success_count, 1)
         )
+        self.num_slices_per_episode.append(num_slices)
 
     def plot(self):
         plt.figure(figsize=(15, 10))
@@ -41,31 +49,41 @@ class TrainingMetrics:
             self.episode_rewards, np.ones(window_size) / window_size, mode="valid"
         )
 
-        plt.subplot(2, 2, 1)
-        plt.plot(self.episode_rewards, alpha=0.3, label="Raw")
-        plt.plot(smoothed_rewards, label="Smoothed")
-        plt.title("Episode Rewards")
-        plt.xlabel("Episode")
-        plt.ylabel("Total Reward")
-        plt.legend()
+        x = list(range(len(self.episode_rewards)))
+        slices = self.num_slices_per_episode
 
-        plt.subplot(2, 2, 2)
-        plt.plot(self.energy_consumptions)
-        plt.title("Energy Consumption")
-        plt.xlabel("Episode")
-        plt.ylabel("Total Energy")
+        def plot_with_slices(x, y, title, ylabel, smoothed=None, subplot_idx=1):
+            ax1 = plt.subplot(2, 2, subplot_idx)
+            ax1.plot(x, y, alpha=0.3, label="Raw")
+            if smoothed is not None:
+                ax1.plot(
+                    x[window_size - 1 :], smoothed, label="Smoothed", color="orange"
+                )
+            ax1.set_title(title)
+            ax1.set_xlabel("Episode")
+            ax1.set_ylabel(ylabel)
+            ax1.legend(loc="upper left")
 
-        plt.subplot(2, 2, 3)
-        plt.plot(self.invalid_actions)
-        plt.title("Invalid Actions")
-        plt.xlabel("Episode")
-        plt.ylabel("Count")
+            ax2 = ax1.twinx()
+            ax2.plot(
+                x, slices, label="# Slices", color="gray", linestyle="--", alpha=0.6
+            )
+            ax2.set_ylabel("Num Slices", color="gray")
+            ax2.tick_params(axis="y", labelcolor="gray")
 
-        plt.subplot(2, 2, 4)
-        plt.plot(self.qos_violations)
-        plt.title("QoS Violations")
-        plt.xlabel("Episode")
-        plt.ylabel("Count")
+        plot_with_slices(
+            x,
+            self.episode_rewards,
+            "Episode Rewards",
+            "Total Reward",
+            smoothed_rewards,
+            1,
+        )
+        plot_with_slices(
+            x, self.energy_consumptions, "Energy Consumption", "Total Energy", None, 2
+        )
+        plot_with_slices(x, self.invalid_actions, "Invalid Actions", "Count", None, 3)
+        plot_with_slices(x, self.qos_violations, "QoS Violations", "Count", None, 4)
 
         plt.tight_layout()
         plt.savefig("training_metrics.png")
@@ -147,7 +165,7 @@ def train_dqn_agent():
     )
 
     # Training parameters
-    n_episodes = 10000
+    n_episodes = 4000
     print_interval = 50
     min_slices = 2
     max_slices = 5
@@ -158,7 +176,7 @@ def train_dqn_agent():
             max_slices,
             min_slices + (episode // 1000),  # Increase every 1000 episodes
         )
-
+        # n_slices = 2
         slices = create_sample_slices(topology, n_slices=n_slices)
 
         episode_reward = 0
@@ -255,6 +273,7 @@ def train_dqn_agent():
             invalid_action_count,
             qos_violated,
             successful_placements,
+            n_slices,
         )
         agent.update_reward_history(episode_reward)
 

@@ -12,6 +12,7 @@ class VNFPlacementEnv(gym.Env):
         super().__init__()
         self.topology = topology
         self.max_slices = max_slices
+        self.accumulated_latency = 0.0
         self.current_slices: List[NetworkSlice] = []
         self.slice_type_mapping = {
             SliceType.URLLC: 0,
@@ -80,62 +81,61 @@ class VNFPlacementEnv(gym.Env):
             return self._get_observation(), -1000.0, True, False, {}
 
         target_node = list(self.topology.nodes())[action]
+        prev_node = None if not current_slice.path else current_slice.path[-1]
         current_vnf = current_slice.vnf_list[current_vnf_idx]
 
-        # Validate placement
-        if not self._validate_placement(target_node, current_vnf):
+        # Validate placement (NO QoS)
+        if not self._validate_placement(prev_node, target_node, current_vnf):
             return self._get_observation(), -1000.0, True, False, {}
 
-        # Initialize path if empty
-        if not current_slice.path:
-            current_slice.path = []
+        # Place VNF
+        self._update_resource_usage(prev_node, target_node, current_vnf)
+        current_slice.add_vnf_node(target_node)
+        qos_met = current_slice.validate_vnf_placement(self.topology)
+        if not qos_met:
+            return self._get_observation(), -1000, True, False, {}
 
         # Energy cost
-        energy_cost = (
-            self.topology.nodes[target_node]["energy_base"] * 0.0001
-            + self.topology.nodes[target_node]["energy_per_vcpu"]
-            * current_vnf.vcpu_usage
-            * 0.00005
-        )
+        # energy_cost = (
+        #     self.topology.nodes[target_node]["energy_base"] * 0.0001
+        #     + self.topology.nodes[target_node]["energy_per_vcpu"]
+        #     * current_vnf.vcpu_usage
+        #     * 0.00005
+        # )
 
         # Path quality
-        path_quality = 0.5 if current_slice.path else 0.0
+        # --> Se conseguir avaliar a qualidade do caminho, em termos de "esse caminho é promissor", melhora MUITO a recompensa
+        # --> É necessário identificar alguma propriedade que identifique que um determinado caminho é promissor. Seria interessante verificar teoria das redes (grafos) para buscar algo que ajude nisso
+        #   --> Por exemplo, grau do nó, muitos recursos disponíveis, nó centralizado, etc... alguma heuristica que permita evitar o calculo completo do shortest_path
+        # Path quality desativado até que isso seja resolvido
+        # path_quality = 0.5 if current_slice.path else 0.0
 
-        # Latency penalty (approximate)
-        latency_penalty = 0.0
-        if current_slice.path:
-            prev_node = current_slice.path[-1]
-            if self.topology.has_edge(prev_node, target_node):
-                latency_penalty = self.topology.edges[prev_node, target_node]["latency"]
-            else:
-                latency_penalty = 1.0  # penalty for breaking topology
+        # 0.8 is the impact of energy to the reward
+        energy_penalty = 0.9 * current_slice.path_energy(self.topology)
+        latency_penalty = 0.5 * current_slice.path_latency(self.topology)
+        link_bonus = (
+            0
+            if not prev_node
+            else 0.1 * current_slice.path_available_bandwidth(self.topology)
+        )
 
-        # Bandwidth efficiency
-        link_bonus = 0.0
-        if current_slice.path and self.topology.has_edge(prev_node, target_node):
-            edge = self.topology.edges[prev_node, target_node]
-            util = edge["link_usage"] / edge["link_capacity"]
-            link_bonus = (1 - util) * 0.2  # favor unused links
-
-        # Base reward
-        reward = 2.0 + path_quality - energy_cost - latency_penalty + link_bonus
-
-        # reward = placement_reward + path_quality - energy_cost
-
-        # Update resources
-        current_slice.path.append(target_node)
-        self.topology.nodes[target_node]["cpu_usage"] += current_vnf.vcpu_usage
-        self.topology.nodes[target_node]["hosted_vnfs"].append(current_vnf)
+        # Base reward --> 100 for vnf placement without breaking QoS
+        reward = (100_000.0 - energy_penalty - latency_penalty + link_bonus) / 100
 
         # Completion bonus
         if len(current_slice.path) == len(current_slice.vnf_list):
-            qos_met = current_slice.validate_vnf_placement(self.topology)
-            reward += 100.0 if qos_met else -70.0
+            reward += 1_000  # equivalent to --> 100_000 / 100
+
+            # print(
+            #    f"[QoS Check] Type: {current_slice.slice_type} | Max Latency: {current_slice.qos.max_latency} | Min Bandwidth: {current_slice.qos.min_bandwidth} --------- "
+            #    f"Actual: {current_slice.path_latency(self.topology):.2f} | Bandwidth OK: {current_slice.path_available_bandwidth(self.topology)}"
+            # )
+
             return self._get_observation(), reward, True, False, {}
 
         return self._get_observation(), reward, False, False, {}
 
-    def _validate_placement(self, node: int, vnf: VNF) -> bool:
+    def _validate_placement(self, prev_node: int | None, node: int, vnf: VNF) -> bool:
         """Check if VNF can be placed on node"""
         node_data = self.topology.nodes[node]
 
@@ -147,11 +147,9 @@ class VNFPlacementEnv(gym.Env):
         if (node_data["cpu_usage"] + vnf.vcpu_usage) > node_data["cpu_limit"]:
             return False
 
-        # Check path continuity for slice
-        if self.current_slices and self.current_slices[-1].path:
-            last_node = self.current_slices[-1].path[-1]
-            if not self.topology.has_edge(last_node, node):
-                return False
+        # Greedy --> Could check a path to this node
+        if prev_node and not self.topology.has_edge(prev_node, node):
+            return False
 
         return True
 
@@ -216,21 +214,14 @@ class VNFPlacementEnv(gym.Env):
         """Reverse mapping"""
         return [SliceType.URLLC, SliceType.EMBB, SliceType.MMTC][val]
 
-    def _update_resource_usage(self):
-        """Update link bandwidth usage based on placed slices"""
-        # Reset all link usages
-        for edge in self.topology.edges():
-            self.topology.edges[edge]["link_usage"] = 0
-
-        # Update based on active slices
-        for slice in self.current_slices:
-            if slice.path:
-                for i in range(len(slice.path) - 1):
-                    u, v = slice.path[i], slice.path[i + 1]
-                    if self.topology.has_edge(u, v):
-                        self.topology.edges[u, v]["link_usage"] += sum(
-                            vnf.bandwidth_usage for vnf in slice.vnf_list
-                        )
+    def _update_resource_usage(self, prev_node, target_node, current_vnf):
+        """Update link bandwidth, cpu usage, and hosted vnfs"""
+        if prev_node:
+            self.topology.edges[prev_node, target_node]["link_usage"] += (
+                current_vnf.bandwidth_usage
+            )
+        self.topology.nodes[target_node]["cpu_usage"] += current_vnf.vcpu_usage
+        self.topology.nodes[target_node]["hosted_vnfs"].append(current_vnf)
 
     def add_slice(self, network_slice: NetworkSlice):
         """Add a new slice to be placed"""
