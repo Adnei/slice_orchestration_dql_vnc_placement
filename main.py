@@ -6,6 +6,8 @@ from typing import List
 from environment.vnf_env import VNFPlacementEnv
 from agents.dqn_agent import DQNAgent
 from environment.network_slice import NetworkSlice, QoS, SliceType, VNF
+
+# from environment.network_topology_generator import NetworkTopologyGenerator
 from environment.barabasi_network_generator import NetworkTopologyGenerator
 
 
@@ -121,7 +123,8 @@ def train_dqn_agent():
     metrics = TrainingMetrics()
 
     # Initialize network topology
-    topology_generator = NetworkTopologyGenerator(n_nodes=100)
+    topology_generator = NetworkTopologyGenerator(n_nodes=50)
+    topology_generator.draw()
     topology = topology_generator.get_graph()
 
     # Create environment
@@ -144,7 +147,7 @@ def train_dqn_agent():
     )
 
     # Training parameters
-    n_episodes = 5000
+    n_episodes = 10000
     print_interval = 50
     min_slices = 2
     max_slices = 5

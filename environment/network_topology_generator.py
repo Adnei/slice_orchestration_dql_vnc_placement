@@ -166,21 +166,25 @@ class NetworkTopologyGenerator:
                 "cpu_limit": random.randint(64, 128),
                 "energy_base": random.uniform(50, 100),
                 "energy_per_vcpu": random.uniform(3, 8),
+                "processing_delay": random.uniform(0.1, 0.3),
             },
             "Edge": {
                 "cpu_limit": random.randint(64, 128),
                 "energy_base": random.uniform(100, 200),
                 "energy_per_vcpu": random.uniform(6, 10),
+                "processing_delay": random.uniform(0.1, 0.3),
             },
             "Transport": {
                 "cpu_limit": random.randint(128, 256),
                 "energy_base": random.uniform(200, 300),
                 "energy_per_vcpu": random.uniform(8, 12),
+                "processing_delay": random.uniform(0.1, 0.3),
             },
             "Core": {
                 "cpu_limit": random.randint(256, 512),
                 "energy_base": random.uniform(300, 400),
                 "energy_per_vcpu": random.uniform(10, 15),
+                "processing_delay": random.uniform(0.1, 0.3),
             },
         }
 
