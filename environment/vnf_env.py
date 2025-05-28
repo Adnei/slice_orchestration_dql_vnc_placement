@@ -66,14 +66,14 @@ class VNFPlacementEnv(gym.Env):
 
         # Handle invalid action
         if action == -1:
-            return self._get_observation(), -5.0, True, False, {}
+            return self._get_observation(), -1000.0, True, False, {}
 
         target_node = list(self.topology.nodes())[action]
         current_vnf = current_slice.vnf_list[current_vnf_idx]
 
         # Validate placement
         if not self._validate_placement(target_node, current_vnf):
-            return self._get_observation(), -10.0, True, False, {}
+            return self._get_observation(), -1000.0, True, False, {}
 
         # Initialize path if empty
         if not current_slice.path:
@@ -98,7 +98,7 @@ class VNFPlacementEnv(gym.Env):
         # Completion bonus
         if len(current_slice.path) == len(current_slice.vnf_list):
             qos_met = current_slice.validate_vnf_placement(self.topology)
-            reward += 10.0 if qos_met else -5.0
+            reward += 50.0 if qos_met else -100.0
             return self._get_observation(), reward, True, False, {}
 
         return self._get_observation(), reward, False, False, {}

@@ -44,7 +44,7 @@ class NetworkSlice:
         self.qos = qos
         self.origin = origin  # RAN node ID
         self.vnf_list: List[VNF] = []
-        self.path: Optional[List[int]] = None
+        self.path: Optional[List[int]] = []
         self.instantiated = False
 
     def add_vnf(self, vnf: VNF):

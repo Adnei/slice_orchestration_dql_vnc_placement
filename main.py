@@ -15,25 +15,33 @@ class TrainingMetrics:
         self.energy_consumptions = []
         self.invalid_actions = []
         self.qos_violations = []
-        self.successful_placements = 0
+        self.successful_placements = []
 
     def update(
-        self, episode_reward, energy, invalid_count, qos_violated, success_count=0
+        self, episode_reward, energy, invalid_count, qos_violated, success_count
     ):
         self.episode_rewards.append(episode_reward)
         self.energy_consumptions.append(energy)
         self.invalid_actions.append(invalid_count)
         self.qos_violations.append(qos_violated)
-        self.successful_placements += success_count
+        self.successful_placements.append(success_count)
 
     def plot(self):
         plt.figure(figsize=(15, 10))
 
+        # Smooth rewards with moving average
+        window_size = 50
+        smoothed_rewards = np.convolve(
+            self.episode_rewards, np.ones(window_size) / window_size, mode="valid"
+        )
+
         plt.subplot(2, 2, 1)
-        plt.plot(self.episode_rewards)
+        plt.plot(self.episode_rewards, alpha=0.3, label="Raw")
+        plt.plot(smoothed_rewards, label="Smoothed")
         plt.title("Episode Rewards")
         plt.xlabel("Episode")
         plt.ylabel("Total Reward")
+        plt.legend()
 
         plt.subplot(2, 2, 2)
         plt.plot(self.energy_consumptions)
@@ -72,23 +80,21 @@ def create_sample_slices(
         slice_type = random.choice(valid_slice_types)
 
         if slice_type == SliceType.URLLC:
-            qos = QoS(qos_id=i, max_latency=100, edge_latency=50, min_bandwidth=5)
+            qos = QoS(qos_id=i, max_latency=50, edge_latency=25, min_bandwidth=10)
             vnf_cpu = random.randint(1, 2)
         elif slice_type == SliceType.EMBB:
-            qos = QoS(qos_id=i, max_latency=200, min_bandwidth=10)
-            vnf_cpu = random.randint(1, 2)
-        else:
-            qos = QoS(qos_id=i, max_latency=300, min_bandwidth=2)
+            qos = QoS(qos_id=i, max_latency=100, min_bandwidth=20)
+            vnf_cpu = random.randint(1, 3)
+        else:  # mMTC
+            qos = QoS(qos_id=i, max_latency=200, min_bandwidth=5)
             vnf_cpu = random.randint(1, 2)
 
         origin = random.choice(ran_nodes)
         network_slice = NetworkSlice(
-            slice_id=i,
-            slice_type=slice_type,
-            qos=qos,
-            origin=origin,
+            slice_id=i, slice_type=slice_type, qos=qos, origin=origin
         )
 
+        # Create VNF chain with type constraints
         for vnf_type in ["RAN", "Edge", "Transport", "Core"]:
             network_slice.add_vnf(
                 VNF(
@@ -111,33 +117,41 @@ def train_dqn_agent():
     metrics = TrainingMetrics()
 
     # Initialize network topology
-    topology_generator = NetworkTopologyGenerator(n_nodes=50)
+    topology_generator = NetworkTopologyGenerator(n_nodes=100)
     topology = topology_generator.get_graph()
 
     # Create environment
     env = VNFPlacementEnv(topology)
 
-    # Create DQN agent
+    # Create DQN agent with optimized parameters
     state_shape = (len(topology.nodes()), len(topology.edges()))
     n_actions = len(topology.nodes())
     agent = DQNAgent(
         state_shape,
         n_actions,
         lr=0.0005,
-        epsilon_start=0.9,
+        gamma=0.99,
+        epsilon_start=1.0,
         epsilon_end=0.05,
-        epsilon_decay=0.992,
+        epsilon_decay=0.999,
+        buffer_size=20000,
         batch_size=128,
-        target_update=100,
+        target_update=200,
     )
 
     # Training parameters
     n_episodes = 5000
     print_interval = 50
+    min_slices = 2
+    max_slices = 5
 
     for episode in range(n_episodes):
         # Dynamic difficulty adjustment
-        n_slices = 2 + (episode // 1000)  # Increase every 1000 episodes
+        n_slices = min(
+            max_slices,
+            min_slices + (episode // 1000),  # Increase every 1000 episodes
+        )
+
         slices = create_sample_slices(topology, n_slices=n_slices)
 
         episode_reward = 0
@@ -150,7 +164,7 @@ def train_dqn_agent():
             state, _ = env.reset()
             env.add_slice(slice)
 
-            # Get initial valid nodes
+            # Get initial valid nodes with path continuity check
             current_vnf_idx = 0
             valid_nodes = [
                 node
@@ -218,11 +232,12 @@ def train_dqn_agent():
                 if not slice.validate_vnf_placement(topology):
                     qos_violated += 1
 
+            # Calculate energy for this slice
             episode_energy += sum(
                 topology.nodes[node]["energy_base"]
                 + topology.nodes[node]["energy_per_vcpu"]
                 * topology.nodes[node]["cpu_usage"]
-                for node in slice.path or []
+                for node in slice.path
             )
 
         # Update metrics and agent's reward history
@@ -235,22 +250,32 @@ def train_dqn_agent():
         )
         agent.update_reward_history(episode_reward)
 
+        # Adaptive exploration adjustment
+        if episode > 100 and successful_placements / n_slices < 0.5:
+            agent.epsilon = min(0.7, agent.epsilon * 1.1)
+
         # Logging
         if episode % print_interval == 0:
             avg_reward = np.mean(metrics.episode_rewards[-print_interval:])
             avg_energy = np.mean(metrics.energy_consumptions[-print_interval:])
+            success_rate = (
+                np.mean(metrics.successful_placements[-print_interval:]) / n_slices
+            )
+
             print(
                 f"Episode {episode} | "
                 f"Avg Reward: {avg_reward:.2f} | "
                 f"Avg Energy: {avg_energy:.2f} | "
-                f"Invalid Actions: {invalid_action_count} | "
+                f"Invalid: {invalid_action_count} | "
                 f"QoS Violations: {qos_violated} | "
-                f"Successful: {successful_placements}/{n_slices}"
+                f"Success Rate: {success_rate:.2f} | "
+                f"Epsilon: {agent.epsilon:.3f}"
             )
 
     # Save results
     agent.save("dqn_agent.pth")
     metrics.plot()
+    print("Training completed. Model saved to dqn_agent.pth")
 
 
 if __name__ == "__main__":
