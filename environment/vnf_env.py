@@ -53,8 +53,19 @@ class VNFPlacementEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+
+        # Clear CPU usage and hosted VNFs from all nodes
+        for node in self.topology.nodes:
+            self.topology.nodes[node]["cpu_usage"] = 0
+            self.topology.nodes[node]["hosted_vnfs"] = []
+
+        # Clear all bandwidth usage on links
+        for edge in self.topology.edges:
+            self.topology.edges[edge]["link_usage"] = 0
+
+        # Reset slice list
         self.current_slices = []
-        self._update_resource_usage()
+
         return self._get_observation(), {}
 
     def step(self, action):
@@ -94,6 +105,7 @@ class VNFPlacementEnv(gym.Env):
         # Update resources
         current_slice.path.append(target_node)
         self.topology.nodes[target_node]["cpu_usage"] += current_vnf.vcpu_usage
+        self.topology.nodes[target_node]["hosted_vnfs"].append(current_vnf)
 
         # Completion bonus
         if len(current_slice.path) == len(current_slice.vnf_list):

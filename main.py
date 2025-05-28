@@ -162,7 +162,6 @@ def train_dqn_agent():
 
         for slice in slices:
             state, _ = env.reset()
-            env.add_slice(slice)
 
             # Get initial valid nodes with path continuity check
             current_vnf_idx = 0
@@ -184,6 +183,8 @@ def train_dqn_agent():
                 invalid_action_count += 1
                 continue
 
+            env.add_slice(slice)
+
             terminated = False
             while not terminated:
                 action = agent.select_action(state, valid_nodes)
@@ -192,7 +193,7 @@ def train_dqn_agent():
                 if action == -1:  # No valid nodes
                     invalid_action_count += 1
                     terminated = True
-                    continue
+                    break
 
                 episode_reward += reward
 
