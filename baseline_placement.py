@@ -74,13 +74,17 @@ def dqn_agent_placement(
         ]
 
         if not valid_nodes:
+            print(f"Empty valid nodes: {valid_nodes}")
             return False
 
         action = agent.select_action(state, valid_nodes)
         next_state, _, terminated, _, _ = env.step(action)
         state = next_state
 
-        if terminated:
+        if terminated and len(slice_obj.path) != len(slice_obj.vnf_list):
+            # print(f"Slice path: {slice_obj.path}")
+            # print(f"VNFS: {slice_obj.vnf_list}")
+            # print(f"lengths match: {len(slice_obj.path) == len(slice_obj.vnf_list)}")
             return False
 
     return True
@@ -139,7 +143,7 @@ if __name__ == "__main__":
         buffer_size=20000,
         batch_size=128,
         target_update=200,
-        eval_mode=True,
+        eval_mode=False,
     )
 
     # Load trained model

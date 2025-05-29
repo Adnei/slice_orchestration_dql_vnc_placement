@@ -143,7 +143,7 @@ def train_dqn_agent():
     # Initialize network topology
     topology_generator = NetworkTopologyGenerator(n_nodes=50)
     topology_generator.draw()
-    topology_generator.export_graph_to_pickle()
+    topology_generator.export_graph_to_pickle(filename="topology.pickle")
     topology = topology_generator.get_graph()
 
     # Create environment
@@ -191,6 +191,7 @@ def train_dqn_agent():
 
             # Get initial valid nodes with path continuity check
             current_vnf_idx = 0
+            # @TODO: Valid nodes should filter only neighbors
             valid_nodes = [
                 node
                 for node in topology.nodes()
@@ -302,8 +303,8 @@ def train_dqn_agent():
             )
 
     # Save results
-    # agent.save("dqn_agent.pth")
-    agent.save("15k_episodes_dqn_agent.pth")
+    agent.save("dqn_agent.pth")
+    # agent.save("15k_episodes_dqn_agent.pth")
     metrics.plot()
     print("Training completed. Model saved to dqn_agent.pth")
 
