@@ -5,6 +5,7 @@ import random
 import numpy as np
 import sys
 from main import create_sample_slices
+from topology_visualizer import TopologyVisualizer
 
 # from main import TrainingMetrics
 
@@ -38,7 +39,7 @@ def test_trained_agent(topology_file, trained_agent_file):
 
     # Test parameters
     n_test_episodes = 1
-    n_slices = 400  # Maximum difficulty
+    n_slices = 10  # Maximum difficulty
 
     # Metrics
     total_energy = 0
@@ -116,6 +117,8 @@ def test_trained_agent(topology_file, trained_agent_file):
             f"Success Rate: {episode_success / n_slices:.2f} | "
             f"Avg Energy: {episode_energy / max(episode_success, 1):.2f}"
         )
+        visualizer = TopologyVisualizer(topology)
+        visualizer.animate_slice_building(slices)
 
     print("\nFinal Test Results:")
     print(f"Overall Success Rate: {total_success / (n_test_episodes * n_slices):.2f}")
