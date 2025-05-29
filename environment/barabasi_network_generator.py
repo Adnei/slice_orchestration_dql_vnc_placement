@@ -129,38 +129,38 @@ class NetworkTopologyGenerator:
         """Validated 5G node attributes based on 3GPP TR 38.801/ETSI NFV"""
         profiles = {
             "RAN": {  # O-RAN Distributed Unit
-                "cpu_limit": 64,  # Fixed for predictability (Intel Xeon D-1577)
-                "memory_gb": 64,
-                "energy_base": 250,  # Watts (Nokia AirScale)
-                "energy_per_vcpu": 4,
-                "processing_delay": 0.15,  # 150μs (TS 38.801)
+                "cpu_limit": random.randint(32, 64),
+                "memory_gb": random.randint(32, 64),
+                "energy_base": random.uniform(150, 250),  # Watts (Nokia AirScale)
+                "energy_per_vcpu": random.uniform(2, 5),
+                "processing_delay": random.uniform(0.1, 0.2),  # 150μs (TS 38.801)
                 "hosted_vnfs": [],
                 "cpu_usage": 0,
             },
             "Edge": {  # MEC Server
-                "cpu_limit": 128,  # Dell EMC PowerEdge XR4000
-                "memory_gb": 256,
-                "energy_base": 500,
-                "energy_per_vcpu": 6,
-                "processing_delay": 0.4,  # 400μs (ETSI MEC 003)
+                "cpu_limit": random.randint(32, 128),  # Dell EMC PowerEdge XR4000
+                "memory_gb": random.randint(32, 256),
+                "energy_base": random.uniform(300, 500),
+                "energy_per_vcpu": random.uniform(4, 6),
+                "processing_delay": random.uniform(0.3, 0.4),  # 400μs (ETSI MEC 003)
                 "hosted_vnfs": [],
                 "cpu_usage": 0,
             },
             "Transport": {  # Regional DC
-                "cpu_limit": 256,  # Cisco UCS C480
-                "memory_gb": 512,
-                "energy_base": 1000,
-                "energy_per_vcpu": 10,
-                "processing_delay": 0.75,  # 750μs
+                "cpu_limit": random.randint(128, 256),  # Cisco UCS C480
+                "memory_gb": random.randint(256, 512),
+                "energy_base": random.uniform(800, 1000),
+                "energy_per_vcpu": random.uniform(8, 14),
+                "processing_delay": random.uniform(0.65, 0.75),  # 750μs
                 "hosted_vnfs": [],
                 "cpu_usage": 0,
             },
             "Core": {  # 5G Core
-                "cpu_limit": 512,  # NVIDIA HGX A100
-                "memory_gb": 1024,
-                "energy_base": 1800,
-                "energy_per_vcpu": 13,
-                "processing_delay": 1.5,  # 1.5ms
+                "cpu_limit": random.randint(256, 512),  # NVIDIA HGX A100
+                "memory_gb": random.randint(512, 1024),
+                "energy_base": random.uniform(1600, 1800),
+                "energy_per_vcpu": random.uniform(14, 18),
+                "processing_delay": random.uniform(1, 1.5),  # 1.5ms
                 "hosted_vnfs": [],
                 "cpu_usage": 0,
             },

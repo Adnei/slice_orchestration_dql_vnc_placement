@@ -9,6 +9,8 @@ import random
 import numpy as np
 import copy
 
+from topology_visualizer import TopologyVisualizer
+
 
 def greedy_placement(env: VNFPlacementEnv, slice_obj: NetworkSlice) -> bool:
     env.add_slice(slice_obj)
@@ -103,13 +105,19 @@ def evaluate_all_approaches(topology, slices, agent):
         total_qos_violations = 0
         total_energy = 0
         total_success = 0
-
+        done_slices = []
         for s in slices:
             clean_slice = copy.deepcopy(s)
             success = strategy(env, clean_slice)
             if success and len(clean_slice.path) == len(clean_slice.vnf_list):
                 total_success += 1
                 total_energy += clean_slice.path_energy(topology)
+                # print(
+                #     f"Strategy: {name} - \nSlice - {clean_slice.slice_id}\nSlice Energy: {clean_slice.path_energy(topology)}"
+                # )
+                done_slices.append(clean_slice)
+                # visualizer = TopologyVisualizer(topology)
+                # visualizer.animate_slice_building(done_slices)
                 if not clean_slice.validate_vnf_placement(topology):
                     total_qos_violations += 1
 
@@ -143,7 +151,7 @@ if __name__ == "__main__":
         buffer_size=20000,
         batch_size=128,
         target_update=200,
-        eval_mode=False,
+        eval_mode=True,
     )
 
     # Load trained model

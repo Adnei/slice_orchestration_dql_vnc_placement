@@ -166,16 +166,16 @@ def train_dqn_agent():
     )
 
     # Training parameters
-    n_episodes = 15000
+    n_episodes = 5000
     print_interval = 50
-    min_slices = 2
+    min_slices = 5
     max_slices = 15
 
     for episode in range(n_episodes):
         # Dynamic difficulty adjustment
         n_slices = min(
             max_slices,
-            min_slices + (episode // 500),  # Increase every 1000 episodes
+            min_slices + (episode // 500),  # Increase every 500 episodes
         )
         # n_slices = 2
         slices = create_sample_slices(topology, n_slices=n_slices)
@@ -185,10 +185,8 @@ def train_dqn_agent():
         invalid_action_count = 0
         qos_violated = 0
         successful_placements = 0
-
+        state, _ = env.reset()
         for slice in slices:
-            state, _ = env.reset()
-
             # Get initial valid nodes with path continuity check
             current_vnf_idx = 0
             # @TODO: Valid nodes should filter only neighbors

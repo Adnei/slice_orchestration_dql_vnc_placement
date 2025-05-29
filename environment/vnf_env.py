@@ -120,8 +120,11 @@ class VNFPlacementEnv(gym.Env):
         )
 
         # Base reward --> 100 for vnf placement without breaking QoS
-        reward = (100_000.0 - energy_penalty - latency_penalty + link_bonus) / 100
-
+        # reward = (100_000.0 - energy_penalty - latency_penalty + link_bonus) / 100
+        # reward = 1000 - 0.05 * energy_penalty - 2 * latency_penalty + 0.1 * link_bonus
+        reward = (
+            100.0 - energy_penalty / 1000 - latency_penalty + 0.1 * link_bonus / 1000
+        )
         # Completion bonus
         if len(current_slice.path) == len(current_slice.vnf_list):
             reward += 1_000  # equivalent to --> 100_000 / 100

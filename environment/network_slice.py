@@ -76,11 +76,17 @@ class NetworkSlice:
     def path_energy(self, topology: "nx.Graph"):
         energy = 0
         for node in self.path:
-            energy += (
-                topology.nodes[node]["energy_base"]
-                + topology.nodes[node]["cpu_usage"]
-                * topology.nodes[node]["energy_per_vcpu"]
-            )
+            node_data = topology.nodes[node]
+            n_hosted_vnfs = (
+                len(node_data["hosted_vnfs"]) or 1
+            )  # node needs to be up anyways, even if there is no VNF
+            share_factor = n_hosted_vnfs - 0.2 if n_hosted_vnfs > 1 else n_hosted_vnfs
+            ###########################################################################
+            # 0.2 is a arbitrary value representing an increase of energy consumption #
+            #    when two or more VNFS are "fighting" for the same resource (overhead)#
+            ###########################################################################
+            energy += node_data["energy_base"] / share_factor
+            energy += node_data["cpu_usage"] * node_data["energy_per_vcpu"]
         return energy
 
     def add_vnf(self, vnf: VNF):

@@ -34,6 +34,7 @@ class TopologyVisualizer:
             cpu_limit = self.topology.nodes[node].get("cpu_limit", "N/A")
             energy_base = self.topology.nodes[node].get("energy_base", "N/A")
             energy_per_vcpu = self.topology.nodes[node].get("energy_per_vcpu", "N/A")
+            total_energy = energy_base + energy_per_vcpu * cpu_usage
 
             # Short label for visibility
             node_trace["text"] += (f"{node} ({node_type})",)
@@ -43,9 +44,10 @@ class TopologyVisualizer:
             # Detailed hover text
             node_trace["hovertext"] += (
                 f"<b>Node {node} ({node_type})</b><br>"
+                f"<b>Total Energy: {total_energy:.2f}</b><br>"
                 f"CPU Usage: {cpu_usage}/{cpu_limit}<br>"
-                f"Energy Base: {energy_base}<br>"
-                f"Energy/VCPU: {energy_per_vcpu}",
+                f"Energy Base: {energy_base:.2f}<br>"
+                f"Energy/VCPU: {energy_per_vcpu:.2f}",
             )
 
             color = {
