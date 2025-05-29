@@ -32,6 +32,7 @@ def test_trained_agent(topology_file, trained_agent_file):
         buffer_size=20000,
         batch_size=128,
         target_update=200,
+        eval_mode=True,
     )
 
     # Load trained model
@@ -39,7 +40,7 @@ def test_trained_agent(topology_file, trained_agent_file):
 
     # Test parameters
     n_test_episodes = 1
-    n_slices = 10  # Maximum difficulty
+    n_slices = 50  # Maximum difficulty
 
     # Metrics
     total_energy = 0

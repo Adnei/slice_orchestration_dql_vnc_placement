@@ -19,9 +19,11 @@ class DQNAgent:
         buffer_size: int = 10000,
         batch_size: int = 128,
         target_update: int = 100,
+        eval_mode: bool = False,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.n_actions = n_actions
+        self.eval_mode = eval_mode
 
         self.policy_net = DQN(state_shape, n_actions).to(self.device)
         self.target_net = DQN(state_shape, n_actions).to(self.device)
@@ -44,17 +46,22 @@ class DQNAgent:
         if not valid_nodes:
             return -1  # Special value indicating no valid nodes
 
-        # Adaptive exploration based on valid nodes
-        explore_prob = self.epsilon
-        if len(valid_nodes) < 3:
-            explore_prob = max(self.epsilon, 0.5)  # Explore more with few options
-
-        if random.random() < explore_prob:
-            return random.choice(valid_nodes)
-
         with torch.no_grad():
             q_values = self.policy_net(state).cpu().numpy()[0]
             valid_q_values = {node: q_values[node] for node in valid_nodes}
+
+        if self.eval_mode:
+            # Always pick the best action during evaluation
+            return max(valid_q_values.items(), key=lambda x: x[1])[0]
+
+        # ε-greedy during training
+        explore_prob = self.epsilon
+        if len(valid_nodes) < 3:
+            explore_prob = max(self.epsilon, 0.5)
+
+        if random.random() < explore_prob:
+            return random.choice(valid_nodes)
+        else:
             return max(valid_q_values.items(), key=lambda x: x[1])[0]
 
     def optimize_model(self):

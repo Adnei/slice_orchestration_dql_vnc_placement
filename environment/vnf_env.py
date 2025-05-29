@@ -228,3 +228,6 @@ class VNFPlacementEnv(gym.Env):
         if len(self.current_slices) >= self.max_slices:
             raise ValueError("Maximum number of slices reached")
         self.current_slices.append(network_slice)
+
+    def get_observation(self):
+        return self._get_observation()
