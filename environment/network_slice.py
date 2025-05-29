@@ -50,6 +50,9 @@ class NetworkSlice:
         self.path: List[int] = []
         self.instantiated = False
 
+    def __str__(self):
+        return f"Slice ID: {self.slice_id}\nSlice Path:{self.path}"
+
     def path_latency(self, topology: "nx.Graph"):
         total_latency = 0
         # Calculate path latency
@@ -74,7 +77,8 @@ class NetworkSlice:
         energy = 0
         for node in self.path:
             energy += (
-                topology.nodes[node]["cpu_usage"]
+                topology.nodes[node]["energy_base"]
+                + topology.nodes[node]["cpu_usage"]
                 * topology.nodes[node]["energy_per_vcpu"]
             )
         return energy

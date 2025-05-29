@@ -8,7 +8,7 @@ from environment.network_slice import NetworkSlice, SliceType, VNF
 
 
 class VNFPlacementEnv(gym.Env):
-    def __init__(self, topology: nx.Graph, max_slices: int = 10):
+    def __init__(self, topology: nx.Graph, max_slices: int = 9999999):
         super().__init__()
         self.topology = topology
         self.max_slices = max_slices

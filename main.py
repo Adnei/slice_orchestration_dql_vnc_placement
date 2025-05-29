@@ -143,6 +143,7 @@ def train_dqn_agent():
     # Initialize network topology
     topology_generator = NetworkTopologyGenerator(n_nodes=50)
     topology_generator.draw()
+    topology_generator.export_graph_to_pickle()
     topology = topology_generator.get_graph()
 
     # Create environment
@@ -165,16 +166,16 @@ def train_dqn_agent():
     )
 
     # Training parameters
-    n_episodes = 4000
+    n_episodes = 15000
     print_interval = 50
     min_slices = 2
-    max_slices = 5
+    max_slices = 15
 
     for episode in range(n_episodes):
         # Dynamic difficulty adjustment
         n_slices = min(
             max_slices,
-            min_slices + (episode // 1000),  # Increase every 1000 episodes
+            min_slices + (episode // 500),  # Increase every 1000 episodes
         )
         # n_slices = 2
         slices = create_sample_slices(topology, n_slices=n_slices)
@@ -259,12 +260,13 @@ def train_dqn_agent():
                     qos_violated += 1
 
             # Calculate energy for this slice
-            episode_energy += sum(
-                topology.nodes[node]["energy_base"]
-                + topology.nodes[node]["energy_per_vcpu"]
-                * topology.nodes[node]["cpu_usage"]
-                for node in slice.path
-            )
+            # episode_energy += sum(
+            #     topology.nodes[node]["energy_base"]
+            #     + topology.nodes[node]["energy_per_vcpu"]
+            #     * topology.nodes[node]["cpu_usage"]
+            #     for node in slice.path
+            # )
+            episode_energy += slice.path_energy(topology)
 
         # Update metrics and agent's reward history
         metrics.update(
@@ -300,7 +302,8 @@ def train_dqn_agent():
             )
 
     # Save results
-    agent.save("dqn_agent.pth")
+    # agent.save("dqn_agent.pth")
+    agent.save("15k_episodes_dqn_agent.pth")
     metrics.plot()
     print("Training completed. Model saved to dqn_agent.pth")
 
