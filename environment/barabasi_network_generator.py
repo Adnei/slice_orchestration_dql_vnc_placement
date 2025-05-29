@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import pickle
 from typing import Dict, List
 import numpy as np
+import copy
 
 
 class NetworkTopologyGenerator:
@@ -126,47 +127,50 @@ class NetworkTopologyGenerator:
                 self.graph.remove_edge(u, v)
 
     def _add_node_attributes(self):
-        """Validated 5G node attributes based on 3GPP TR 38.801/ETSI NFV"""
-        profiles = {
-            "RAN": {  # O-RAN Distributed Unit
-                "cpu_limit": random.randint(32, 64),
-                "memory_gb": random.randint(32, 64),
-                "energy_base": random.uniform(150, 250),  # Watts (Nokia AirScale)
-                "energy_per_vcpu": random.uniform(2, 5),
-                "processing_delay": random.uniform(0.1, 0.2),  # 150μs (TS 38.801)
-                "hosted_vnfs": [],
-                "cpu_usage": 0,
-            },
-            "Edge": {  # MEC Server
-                "cpu_limit": random.randint(32, 128),  # Dell EMC PowerEdge XR4000
-                "memory_gb": random.randint(32, 256),
-                "energy_base": random.uniform(300, 500),
-                "energy_per_vcpu": random.uniform(4, 6),
-                "processing_delay": random.uniform(0.3, 0.4),  # 400μs (ETSI MEC 003)
-                "hosted_vnfs": [],
-                "cpu_usage": 0,
-            },
-            "Transport": {  # Regional DC
-                "cpu_limit": random.randint(128, 256),  # Cisco UCS C480
-                "memory_gb": random.randint(256, 512),
-                "energy_base": random.uniform(800, 1000),
-                "energy_per_vcpu": random.uniform(8, 14),
-                "processing_delay": random.uniform(0.65, 0.75),  # 750μs
-                "hosted_vnfs": [],
-                "cpu_usage": 0,
-            },
-            "Core": {  # 5G Core
-                "cpu_limit": random.randint(256, 512),  # NVIDIA HGX A100
-                "memory_gb": random.randint(512, 1024),
-                "energy_base": random.uniform(1600, 1800),
-                "energy_per_vcpu": random.uniform(14, 18),
-                "processing_delay": random.uniform(1, 1.5),  # 1.5ms
-                "hosted_vnfs": [],
-                "cpu_usage": 0,
-            },
-        }
+        """Assign randomized validated 5G node attributes per node instance"""
         for node in self.graph.nodes:
-            self.graph.nodes[node].update(profiles[self.graph.nodes[node]["type"]])
+            node_type = self.graph.nodes[node]["type"]
+
+            if node_type == "RAN":
+                profile = {
+                    "cpu_limit": random.randint(32, 64),
+                    "memory_gb": random.randint(32, 64),
+                    "energy_base": random.uniform(150, 250),
+                    "energy_per_vcpu": random.uniform(2, 5),
+                    "processing_delay": random.uniform(0.1, 0.2),
+                }
+            elif node_type == "Edge":
+                profile = {
+                    "cpu_limit": random.randint(32, 128),
+                    "memory_gb": random.randint(32, 256),
+                    "energy_base": random.uniform(300, 500),
+                    "energy_per_vcpu": random.uniform(4, 6),
+                    "processing_delay": random.uniform(0.3, 0.4),
+                }
+            elif node_type == "Transport":
+                profile = {
+                    "cpu_limit": random.randint(128, 256),
+                    "memory_gb": random.randint(256, 512),
+                    "energy_base": random.uniform(800, 1000),
+                    "energy_per_vcpu": random.uniform(8, 14),
+                    "processing_delay": random.uniform(0.65, 0.75),
+                }
+            elif node_type == "Core":
+                profile = {
+                    "cpu_limit": random.randint(256, 512),
+                    "memory_gb": random.randint(512, 1024),
+                    "energy_base": random.uniform(1600, 1800),
+                    "energy_per_vcpu": random.uniform(14, 18),
+                    "processing_delay": random.uniform(1, 1.5),
+                }
+            else:
+                raise ValueError(f"Unknown node type: {node_type}")
+
+            # Add shared fields
+            profile["cpu_usage"] = 0
+            profile["hosted_vnfs"] = []
+
+            self.graph.nodes[node].update(profile)
 
     def _add_edge_attributes(self):
         """Validated latency/capacity from 3GPP TS 38.104/ETSI GS NFV-INF 001"""

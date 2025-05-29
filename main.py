@@ -9,6 +9,7 @@ from environment.network_slice import NetworkSlice, QoS, SliceType, VNF
 
 # from environment.network_topology_generator import NetworkTopologyGenerator
 from environment.barabasi_network_generator import NetworkTopologyGenerator
+from topology_visualizer import TopologyVisualizer
 
 
 class TrainingMetrics:
@@ -170,6 +171,9 @@ def train_dqn_agent():
     print_interval = 50
     min_slices = 5
     max_slices = 15
+
+    # visualizer = TopologyVisualizer(topology)
+    # visualizer.animate_slice_building([])
 
     for episode in range(n_episodes):
         # Dynamic difficulty adjustment

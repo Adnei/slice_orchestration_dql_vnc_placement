@@ -29,7 +29,7 @@ def greedy_placement(env: VNFPlacementEnv, slice_obj: NetworkSlice) -> bool:
         if not valid_nodes:
             return False
 
-        chosen_node = valid_nodes[0]
+        chosen_node = valid_nodes[-1]
         env.step(chosen_node)
 
     return True
