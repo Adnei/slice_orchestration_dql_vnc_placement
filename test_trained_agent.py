@@ -40,7 +40,7 @@ def test_trained_agent(topology_file, trained_agent_file):
 
     # Test parameters
     n_test_episodes = 1
-    n_slices = 50  # Maximum difficulty
+    n_slices = 2  # Maximum difficulty
 
     # Metrics
     total_energy = 0

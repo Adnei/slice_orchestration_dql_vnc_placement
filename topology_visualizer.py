@@ -59,34 +59,46 @@ class TopologyVisualizer:
         return node_trace
 
     def _get_edge_trace(self):
-        edge_x = []
-        edge_y = []
-        edge_text = []
+        edge_lines = go.Scatter(
+            x=[],
+            y=[],
+            mode="lines",
+            line=dict(width=1.5, color="#888"),
+            hoverinfo="none",  # disable hover for base lines
+        )
+
+        edge_hover = go.Scatter(
+            x=[],
+            y=[],
+            mode="markers",
+            marker=dict(size=10, color="rgba(0,0,0,0)"),  # fully transparent
+            hoverinfo="text",
+            text=[],
+        )
 
         for edge in self.topology.edges():
             x0, y0 = self.pos[edge[0]]
             x1, y1 = self.pos[edge[1]]
 
-            bw = self.topology.edges[edge].get("bandwidth", "N/A")
-            delay = self.topology.edges[edge].get("delay", "N/A")
+            # Add the edge line
+            edge_lines["x"] += (x0, x1, None)
+            edge_lines["y"] += (y0, y1, None)
 
-            edge_x += [x0, x1, None]
-            edge_y += [y0, y1, None]
-            edge_text += [
-                f"<b>Edge: {edge[0]} ↔ {edge[1]}</b><br>Bandwidth: {bw}<br>Delay: {delay}",
-                f"<b>Edge: {edge[0]} ↔ {edge[1]}</b><br>Bandwidth: {bw}<br>Delay: {delay}",
-                None,
-            ]
+            # Add invisible midpoint marker for hover
+            mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+            bw = self.topology.edges[edge].get("link_capacity", "N/A")
+            latency = self.topology.edges[edge].get("latency", "N/A")
+            used_bw = self.topology.edges[edge].get("link_usage", "0")
+            usage_percent = (used_bw / bw) * 100
 
-        edge_trace = go.Scatter(
-            x=edge_x,
-            y=edge_y,
-            line=dict(width=1.5, color="#888"),
-            hoverinfo="text",
-            text=edge_text,
-            mode="lines",
-        )
-        return edge_trace
+            edge_hover["x"] += (mx,)
+            edge_hover["y"] += (my,)
+            edge_hover["text"] += (
+                f"<b>Link {edge[0]} ↔ {edge[1]}</b><br>Latency: {latency}<br>"
+                f"Usage (%): {usage_percent:.2f}",
+            )
+
+        return [edge_lines, edge_hover]
 
     def _get_slice_trace(self, slice_obj, slice_id):
         path = slice_obj.path
@@ -110,7 +122,9 @@ class TopologyVisualizer:
     def animate_slice_building(self, slices, delay=1.5):
         for i, slice_obj in enumerate(slices):
             fig = go.Figure()
-            fig.add_trace(self._get_edge_trace())
+            # fig.add_trace(self._get_edge_trace())
+            for trace in self._get_edge_trace():
+                fig.add_trace(trace)
             fig.add_trace(self._get_node_trace())
 
             for j in range(i + 1):
