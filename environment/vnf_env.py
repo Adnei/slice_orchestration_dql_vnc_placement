@@ -84,7 +84,7 @@ class VNFPlacementEnv(gym.Env):
         prev_node = None if not current_slice.path else current_slice.path[-1]
         current_vnf = current_slice.vnf_list[current_vnf_idx]
 
-        # Validate placement (NO QoS)
+        # Validate placement (different than QoS)
         if not self._validate_placement(prev_node, target_node, current_vnf):
             return self._get_observation(), -1000.0, True, False, {}
 

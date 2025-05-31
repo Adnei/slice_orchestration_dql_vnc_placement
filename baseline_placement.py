@@ -30,7 +30,12 @@ def greedy_placement(env: VNFPlacementEnv, slice_obj: NetworkSlice) -> bool:
             return False
 
         chosen_node = valid_nodes[-1]
-        env.step(chosen_node)
+        # env.step(chosen_node)
+        _, reward, terminated, _, _ = env.step(chosen_node)
+        if reward < 0 or (
+            terminated and len(slice_obj.path) != len(slice_obj.vnf_list)
+        ):
+            return False
 
     return True
 
@@ -53,7 +58,12 @@ def random_valid_placement(env: VNFPlacementEnv, slice_obj: NetworkSlice) -> boo
             return False
 
         chosen_node = random.choice(valid_nodes)
-        env.step(chosen_node)
+        # env.step(chosen_node)
+        _, reward, terminated, _, _ = env.step(chosen_node)
+        if reward < 0 or (
+            terminated and len(slice_obj.path) != len(slice_obj.vnf_list)
+        ):
+            return False
 
     return True
 
@@ -76,14 +86,16 @@ def dqn_agent_placement(
         ]
 
         if not valid_nodes:
-            print(f"Empty valid nodes: {valid_nodes}")
+            # print(f"Empty valid nodes: {valid_nodes}")
             return False
 
         action = agent.select_action(state, valid_nodes)
-        next_state, _, terminated, _, _ = env.step(action)
+        next_state, reward, terminated, _, _ = env.step(action)
         state = next_state
 
-        if terminated and len(slice_obj.path) != len(slice_obj.vnf_list):
+        if reward < 0 or (
+            terminated and len(slice_obj.path) != len(slice_obj.vnf_list)
+        ):
             # print(f"Slice path: {slice_obj.path}")
             # print(f"VNFS: {slice_obj.vnf_list}")
             # print(f"lengths match: {len(slice_obj.path) == len(slice_obj.vnf_list)}")
@@ -118,13 +130,11 @@ def evaluate_all_approaches(topology, slices, agent):
                 done_slices.append(clean_slice)
                 # visualizer = TopologyVisualizer(topology)
                 # visualizer.animate_slice_building(done_slices)
-                if not clean_slice.validate_vnf_placement(topology):
-                    total_qos_violations += 1
 
         print(f"\n{name} Strategy")
         print(f"Success Rate: {total_success / len(slices):.2f}")
         print(f"Avg Energy per Success: {total_energy / max(total_success, 1):.2f}")
-        print(f"QoS Violations: {total_qos_violations}")
+        print(f"QoS Violations: {len(slices) - total_success}")
 
 
 if __name__ == "__main__":
@@ -145,8 +155,8 @@ if __name__ == "__main__":
         n_actions,
         lr=0.0005,
         gamma=0.99,
-        epsilon_start=0.05,  # Keep epsilon low for testing
-        epsilon_end=0.05,
+        epsilon_start=0.15,  # Keep epsilon low for testing
+        epsilon_end=0.15,
         epsilon_decay=1.0,  # No decay during testing
         buffer_size=20000,
         batch_size=128,

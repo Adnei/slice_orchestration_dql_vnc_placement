@@ -144,7 +144,7 @@ def train_dqn_agent():
     # Initialize network topology
     topology_generator = NetworkTopologyGenerator(n_nodes=50)
     topology_generator.draw()
-    topology_generator.export_graph_to_pickle(filename="topology.pickle")
+    topology_generator.export_graph_to_pickle(filename="heavy_training_topology.pickle")
     topology = topology_generator.get_graph()
 
     # Create environment
@@ -159,7 +159,7 @@ def train_dqn_agent():
         lr=0.0005,
         gamma=0.99,
         epsilon_start=1.0,
-        epsilon_end=0.05,
+        epsilon_end=0.15,  # Updated from 0.05 to 0.15
         epsilon_decay=0.999,
         buffer_size=20000,
         batch_size=128,
@@ -167,10 +167,10 @@ def train_dqn_agent():
     )
 
     # Training parameters
-    n_episodes = 5000
+    n_episodes = 15000
     print_interval = 50
-    min_slices = 5
-    max_slices = 15
+    min_slices = 1
+    max_slices = 484  # --> pow(22, 2)
 
     # visualizer = TopologyVisualizer(topology)
     # visualizer.animate_slice_building([])
@@ -179,7 +179,7 @@ def train_dqn_agent():
         # Dynamic difficulty adjustment
         n_slices = min(
             max_slices,
-            min_slices + (episode // 500),  # Increase every 500 episodes
+            pow(min_slices + (episode // 500), 2),  # Increase every 500 episodes
         )
         # n_slices = 2
         slices = create_sample_slices(topology, n_slices=n_slices)
@@ -226,6 +226,9 @@ def train_dqn_agent():
 
                 episode_reward += reward
 
+                if reward < 0:
+                    qos_violated += 1
+
                 # Store experience
                 agent.memory.push(state, action, reward, next_state, terminated)
 
@@ -259,8 +262,8 @@ def train_dqn_agent():
             # Update metrics after slice placement
             if slice.path and len(slice.path) == len(slice.vnf_list):
                 successful_placements += 1
-                if not slice.validate_vnf_placement(topology):
-                    qos_violated += 1
+                # if not slice.validate_vnf_placement(topology):
+                #     qos_violated += 1
 
             # Calculate energy for this slice
             # episode_energy += sum(
@@ -305,7 +308,8 @@ def train_dqn_agent():
             )
 
     # Save results
-    agent.save("dqn_agent.pth")
+    agent.save("heavy_training_15k_500slc.pth")
+    # agent.save("dqn_agent.pth")
     # agent.save("15k_episodes_dqn_agent.pth")
     metrics.plot()
     print("Training completed. Model saved to dqn_agent.pth")
