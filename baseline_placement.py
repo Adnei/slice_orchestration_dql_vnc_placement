@@ -118,8 +118,9 @@ def evaluate_all_approaches(topology, slices, agent):
         total_energy = 0
         total_success = 0
         done_slices = []
-        for s in slices:
-            clean_slice = copy.deepcopy(s)
+        new_slices = copy.deepcopy(slices)
+        for clean_slice in new_slices:
+            # clean_slice = copy.deepcopy(s)
             success = strategy(env, clean_slice)
             if success and len(clean_slice.path) == len(clean_slice.vnf_list):
                 total_success += 1
@@ -131,6 +132,10 @@ def evaluate_all_approaches(topology, slices, agent):
                 # visualizer = TopologyVisualizer(topology)
                 # visualizer.animate_slice_building(done_slices)
         total_energy = env.total_energy_used(topology)
+        visualizer = TopologyVisualizer(topology)
+        visualizer.animate_slice_building(
+            new_slices, complete_fig_name=f"{name}_placement"
+        )
 
         print(f"\n{name} Strategy")
         print(f"Success Rate: {total_success / len(slices):.2f}")
@@ -162,7 +167,7 @@ if __name__ == "__main__":
         buffer_size=20000,
         batch_size=128,
         target_update=200,
-        # eval_mode=True,
+        eval_mode=True,
     )
 
     # Load trained model

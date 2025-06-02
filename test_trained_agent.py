@@ -32,7 +32,7 @@ def test_trained_agent(topology_file, trained_agent_file):
         buffer_size=20000,
         batch_size=128,
         target_update=200,
-        eval_mode=True,
+        # eval_mode=True,
     )
 
     # Load trained model
@@ -119,7 +119,7 @@ def test_trained_agent(topology_file, trained_agent_file):
             f"Avg Energy: {episode_energy / max(episode_success, 1):.2f}"
         )
         visualizer = TopologyVisualizer(topology)
-        visualizer.animate_slice_building(slices)
+        visualizer.animate_slice_building(slices, complete_fig_name="testing_agent")
 
     print("\nFinal Test Results:")
     print(f"Overall Success Rate: {total_success / (n_test_episodes * n_slices):.2f}")

@@ -250,3 +250,11 @@ class NetworkTopologyGenerator:
     def get_node_name(self, node_id: int) -> str:
         """Get hierarchical name for a node"""
         return self.node_mapping.get(node_id, str(node_id))
+
+    def get_topology_consumption(self):
+        total_energy = 0
+        for node in self.graph.nodes:
+            if node["cpu_usage"] > 0:
+                total_energy += node["energy_base"]
+            total_energy += node["cpu_usage"] * node["energy_per_vcpu"]
+        return total_energy

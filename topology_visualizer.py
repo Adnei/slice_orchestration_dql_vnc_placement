@@ -121,7 +121,10 @@ class TopologyVisualizer:
         )
         return trace
 
-    def animate_slice_building(self, slices, delay=1.5):
+    def animate_slice_building(self, slices, delay=1.5, complete_fig_name=""):
+        # fig = go.Figure()
+        topology_consumption = self._get_topology_consumption()
+        fig = None
         for i, slice_obj in enumerate(slices):
             fig = go.Figure()
             # fig.add_trace(self._get_edge_trace())
@@ -135,11 +138,24 @@ class TopologyVisualizer:
                     fig.add_trace(trace)
 
             fig.update_layout(
-                title=f"Slice Placement Animation - Slice {i} ({slice_obj.slice_type.name})",
+                title=f"Slice Placement Animation - Slice {i} ({slice_obj.slice_type.name}) - Energy Usage: {topology_consumption}",
                 showlegend=True,
                 margin=dict(l=20, r=20, t=40, b=20),
                 hovermode="closest",
             )
+            if not complete_fig_name:
+                fig.write_html(f"slice_{i}.html", auto_open=True)
+                time.sleep(delay)
+        if complete_fig_name:
+            fig.write_html(f"{complete_fig_name}.html", auto_open=True)
 
-            fig.write_html(f"slice_{i}.html", auto_open=True)
-            time.sleep(delay)
+    def _get_topology_consumption(self):
+        total_energy = 0
+        for node in self.topology.nodes():
+            if self.topology.nodes[node]["cpu_usage"] > 0:
+                total_energy += self.topology.nodes[node]["energy_base"]
+            total_energy += (
+                self.topology.nodes[node]["cpu_usage"]
+                * self.topology.nodes[node]["energy_per_vcpu"]
+            )
+        return total_energy

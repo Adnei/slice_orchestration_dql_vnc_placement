@@ -91,7 +91,7 @@ class VNFPlacementEnv(gym.Env):
         prev_energy = self.total_energy_used(self.topology)
 
         # Place VNF
-        is_node_active = self.topology.nodes[target_node]["cpu_usage"] > 0
+        was_node_active = self.topology.nodes[target_node]["cpu_usage"] > 0
         self._update_resource_usage(prev_node, target_node, current_vnf)
         current_slice.add_vnf_node(target_node)
         qos_met = current_slice.validate_vnf_placement(self.topology)
@@ -107,7 +107,7 @@ class VNFPlacementEnv(gym.Env):
 
         new_energy = self.total_energy_used(self.topology)
         delta_energy = new_energy - prev_energy
-        delta_energy *= 2 if is_node_active else 1
+        delta_energy *= 1 if was_node_active else 2  # Penalty for activating the node
         latency_penalty = 0.5 * current_slice.path_latency(self.topology)
         link_bonus = (
             0
@@ -115,8 +115,10 @@ class VNFPlacementEnv(gym.Env):
             else 0.1 * current_slice.path_available_bandwidth(self.topology)
         )
 
-        reuse_bonus = 50 if is_node_active else 0  # +20 for reusing a powered node
-        activation_penalty = 50 if not is_node_active else 0
+        reuse_bonus = 50 if was_node_active else 0  # +20 for reusing a powered node
+        activation_penalty = (
+            50 if not was_node_active else 0
+        )  # Boosting penalty for node activation
 
         reward = (
             100.0

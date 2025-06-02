@@ -159,7 +159,7 @@ def train_dqn_agent():
         lr=0.0005,
         gamma=0.99,
         epsilon_start=1.0,
-        epsilon_end=0.3,  # Updated from 0.05 to 0.15
+        epsilon_end=0.5,  # Updated from 0.05 to 0.15 --> Trying to explore more
         epsilon_decay=0.999,
         buffer_size=20000,
         batch_size=128,
@@ -167,20 +167,21 @@ def train_dqn_agent():
     )
 
     # Training parameters
-    n_episodes = 5000
+    n_episodes = 10000
     print_interval = 50
     min_slices = 1
-    max_slices = 484  # --> pow(22, 2)
+    max_slices = 200  # --> pow(22, 2)
 
     # visualizer = TopologyVisualizer(topology)
     # visualizer.animate_slice_building([])
 
     for episode in range(n_episodes):
         # Dynamic difficulty adjustment
-        n_slices = min(
-            max_slices,
-            pow(min_slices + (episode // 250), 2),  # Increase every 500 episodes
-        )
+        # n_slices = min(
+        #     max_slices,
+        #     pow(min_slices + (episode // 250), 2),  # Increase every 500 episodes
+        # )
+        n_slices = int(min(max_slices, 1 + np.log1p(episode) * 2))
         # n_slices = 2
         slices = create_sample_slices(topology, n_slices=n_slices)
 
@@ -226,7 +227,7 @@ def train_dqn_agent():
 
                 episode_reward += reward
 
-                if reward < 0:
+                if reward < 0 or not slice.validate_vnf_placement(topology):
                     qos_violated += 1
 
                 # Store experience
