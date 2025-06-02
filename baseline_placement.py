@@ -162,7 +162,7 @@ if __name__ == "__main__":
         buffer_size=20000,
         batch_size=128,
         target_update=200,
-        # eval_mode=True,
+        eval_mode=True,
     )
 
     # Load trained model

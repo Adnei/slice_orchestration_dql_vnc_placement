@@ -167,7 +167,7 @@ def train_dqn_agent():
     )
 
     # Training parameters
-    n_episodes = 5000
+    n_episodes = 300
     print_interval = 50
     min_slices = 1
     max_slices = 484  # --> pow(22, 2)
@@ -177,11 +177,12 @@ def train_dqn_agent():
 
     for episode in range(n_episodes):
         # Dynamic difficulty adjustment
-        n_slices = min(
-            max_slices,
-            pow(min_slices + (episode // 250), 2),  # Increase every 500 episodes
-        )
+        # n_slices = min(
+        #     max_slices,
+        #     pow(min_slices + (episode // 250), 2),  # Increase every 500 episodes
+        # )
         # n_slices = 2
+        n_slices = int(min(max_slices, 5 + np.log1p(episode) * 30))
         slices = create_sample_slices(topology, n_slices=n_slices)
 
         episode_reward = 0
@@ -226,7 +227,7 @@ def train_dqn_agent():
 
                 episode_reward += reward
 
-                if reward < 0:
+                if reward < 0 or not slice.validate_vnf_placement(topology):
                     qos_violated += 1
 
                 # Store experience
