@@ -88,20 +88,15 @@ class VNFPlacementEnv(gym.Env):
         if not self._validate_placement(prev_node, target_node, current_vnf):
             return self._get_observation(), -1000.0, True, False, {}
 
+        prev_energy = self.total_energy_used(self.topology)
+
         # Place VNF
+        is_node_active = self.topology.nodes[target_node]["cpu_usage"] > 0
         self._update_resource_usage(prev_node, target_node, current_vnf)
         current_slice.add_vnf_node(target_node)
         qos_met = current_slice.validate_vnf_placement(self.topology)
         if not qos_met:
             return self._get_observation(), -1000, True, False, {}
-
-        # Energy cost
-        # energy_cost = (
-        #     self.topology.nodes[target_node]["energy_base"] * 0.0001
-        #     + self.topology.nodes[target_node]["energy_per_vcpu"]
-        #     * current_vnf.vcpu_usage
-        #     * 0.00005
-        # )
 
         # Path quality
         # --> Se conseguir avaliar a qualidade do caminho, em termos de "esse caminho é promissor", melhora MUITO a recompensa
@@ -110,8 +105,9 @@ class VNFPlacementEnv(gym.Env):
         # Path quality desativado até que isso seja resolvido
         # path_quality = 0.5 if current_slice.path else 0.0
 
-        # 0.8 is the impact of energy to the reward
-        energy_penalty = 0.9 * current_slice.path_energy(self.topology)
+        new_energy = self.total_energy_used(self.topology)
+        delta_energy = new_energy - prev_energy
+        delta_energy *= 2 if is_node_active else 1
         latency_penalty = 0.5 * current_slice.path_latency(self.topology)
         link_bonus = (
             0
@@ -119,15 +115,21 @@ class VNFPlacementEnv(gym.Env):
             else 0.1 * current_slice.path_available_bandwidth(self.topology)
         )
 
-        # Base reward --> 100 for vnf placement without breaking QoS
-        # reward = (100_000.0 - energy_penalty - latency_penalty + link_bonus) / 100
-        # reward = 1000 - 0.05 * energy_penalty - 2 * latency_penalty + 0.1 * link_bonus
+        reuse_bonus = 50 if is_node_active else 0  # +20 for reusing a powered node
+        activation_penalty = 50 if not is_node_active else 0
+
         reward = (
-            100.0 - energy_penalty / 1000 - latency_penalty + 0.1 * link_bonus / 1000
+            100.0
+            - delta_energy / 100
+            - latency_penalty
+            + 0.1 * link_bonus / 1000
+            + reuse_bonus
+            - activation_penalty
         )
+
         # Completion bonus
         if len(current_slice.path) == len(current_slice.vnf_list):
-            reward += 1_000  # equivalent to --> 100_000 / 100
+            reward += 100  # equivalent to --> 100_000 / 100
 
             # print(
             #    f"[QoS Check] Type: {current_slice.slice_type} | Max Latency: {current_slice.qos.max_latency} | Min Bandwidth: {current_slice.qos.min_bandwidth} --------- "
@@ -234,3 +236,12 @@ class VNFPlacementEnv(gym.Env):
 
     def get_observation(self):
         return self._get_observation()
+
+    def total_energy_used(self, topology: nx.Graph):
+        total = 0
+        for node in topology.nodes:
+            node_data = topology.nodes[node]
+            if node_data["cpu_usage"] > 0:
+                total += node_data["energy_base"]
+            total += node_data["cpu_usage"] * node_data["energy_per_vcpu"]
+        return total
