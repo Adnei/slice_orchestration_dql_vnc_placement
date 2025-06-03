@@ -6,6 +6,7 @@ from typing import List
 from environment.vnf_env import VNFPlacementEnv
 from agents.dqn_agent import DQNAgent
 from environment.network_slice import NetworkSlice, QoS, SliceType, VNF
+import sys
 
 # from environment.network_topology_generator import NetworkTopologyGenerator
 from environment.barabasi_network_generator import NetworkTopologyGenerator
@@ -138,7 +139,7 @@ def create_sample_slices(
     return slices
 
 
-def train_dqn_agent():
+def train_dqn_agent(agent_load=None):
     metrics = TrainingMetrics()
 
     # Initialize network topology
@@ -159,18 +160,21 @@ def train_dqn_agent():
         lr=0.0005,
         gamma=0.99,
         epsilon_start=1.0,
-        epsilon_end=0.5,  # Updated from 0.05 to 0.15 --> Trying to explore more
-        epsilon_decay=0.999,
+        epsilon_end=0.05,  # Updated from 0.05 to 0.15 --> Trying to explore more (0.5)
+        epsilon_decay=0.995,
         buffer_size=20000,
         batch_size=128,
         target_update=200,
     )
 
+    if agent_load:
+        agent.load(agent_load)
+
     # Training parameters
-    n_episodes = 10000
+    n_episodes = 15000
     print_interval = 50
     min_slices = 1
-    max_slices = 200  # --> pow(22, 2)
+    max_slices = 484  # --> pow(22, 2)
 
     # visualizer = TopologyVisualizer(topology)
     # visualizer.animate_slice_building([])
@@ -179,9 +183,10 @@ def train_dqn_agent():
         # Dynamic difficulty adjustment
         # n_slices = min(
         #     max_slices,
-        #     pow(min_slices + (episode // 250), 2),  # Increase every 500 episodes
+        #     pow(min_slices + (episode // 500), 2),  # Increase every 500 episodes
         # )
-        n_slices = int(min(max_slices, 1 + np.log1p(episode) * 2))
+        n_slices = int(min(max_slices, 2 + np.log1p(episode) * 10))
+        # n_slices = int(min(max_slices, 1 + np.log1p(episode) * 2))
         # n_slices = 2
         slices = create_sample_slices(topology, n_slices=n_slices)
 
@@ -317,4 +322,5 @@ def train_dqn_agent():
 
 
 if __name__ == "__main__":
-    train_dqn_agent()
+    agent_load = sys.argv[1] if len(sys.argv) > 1 else None
+    train_dqn_agent(agent_load=agent_load)

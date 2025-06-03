@@ -33,6 +33,7 @@ class TopologyVisualizer:
             cpu_usage = self.topology.nodes[node].get("cpu_usage", "N/A")
             cpu_limit = self.topology.nodes[node].get("cpu_limit", "N/A")
             energy_base = self.topology.nodes[node].get("energy_base", "N/A")
+            hosted_vnfs = self.topology.nodes[node].get("hosted_vnfs", [])
             energy_per_vcpu = self.topology.nodes[node].get("energy_per_vcpu", "N/A")
             total_energy = energy_base + energy_per_vcpu * cpu_usage
 
@@ -47,7 +48,8 @@ class TopologyVisualizer:
                 f"<b>Total Energy: {total_energy:.2f}</b><br>"
                 f"CPU Usage: {cpu_usage}/{cpu_limit}<br>"
                 f"Energy Base: {energy_base:.2f}<br>"
-                f"Energy/VCPU: {energy_per_vcpu:.2f}",
+                f"Energy/VCPU: {energy_per_vcpu:.2f}<br>"
+                f"Hosting VNFs: {len(hosted_vnfs)}",
             )
 
             color = {
