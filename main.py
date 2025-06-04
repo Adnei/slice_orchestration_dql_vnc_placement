@@ -171,21 +171,21 @@ def train_dqn_agent(agent_load=None):
         agent.load(agent_load)
 
     # Training parameters
-    n_episodes = 15000
+    n_episodes = 12000
     print_interval = 50
-    min_slices = 1
-    max_slices = 484  # --> pow(22, 2)
+    min_slices = 2
+    max_slices = 529  # --> pow(23, 2)
 
     # visualizer = TopologyVisualizer(topology)
     # visualizer.animate_slice_building([])
 
     for episode in range(n_episodes):
         # Dynamic difficulty adjustment
-        # n_slices = min(
-        #     max_slices,
-        #     pow(min_slices + (episode // 500), 2),  # Increase every 500 episodes
-        # )
-        n_slices = int(min(max_slices, 2 + np.log1p(episode) * 10))
+        n_slices = min(
+            max_slices,
+            pow(min_slices + (episode // 500), 2),  # Increase every 500 episodes
+        )
+        # n_slices = int(min(max_slices, 2 + np.log1p(episode) * 10))
         # n_slices = int(min(max_slices, 1 + np.log1p(episode) * 2))
         # n_slices = 2
         slices = create_sample_slices(topology, n_slices=n_slices)
