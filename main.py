@@ -4,7 +4,10 @@ import random
 import matplotlib.pyplot as plt
 from typing import List
 from environment.vnf_env import VNFPlacementEnv
-from agents.dqn_agent import DQNAgent
+from slice_scheduler import SliceScheduler
+
+# from agents.dqn_agent import DQNAgent
+from agents.double_dueling_dqn_agent import D3QNAgent as DQNAgent
 from environment.network_slice import NetworkSlice, QoS, SliceType, VNF
 import sys
 
@@ -91,6 +94,33 @@ class TrainingMetrics:
         plt.savefig("training_metrics.png")
         plt.close()
 
+    def plot_convergence_curve(self, filename="convergence_curve.png"):
+        plt.figure(figsize=(12, 6))
+
+        def smooth(values, alpha=0.1):
+            ema = [values[0]]
+            for v in values[1:]:
+                ema.append(alpha * v + (1 - alpha) * ema[-1])
+            return ema
+
+        episodes = np.arange(len(self.episode_rewards))
+        smoothed_rewards = smooth(self.episode_rewards)
+        smoothed_energy = smooth(self.energy_consumptions)
+        smoothed_success = smooth(self.qos_success_rate)
+
+        plt.plot(episodes, smoothed_rewards, label="Reward (EMA)", color="blue")
+        plt.plot(episodes, smoothed_energy, label="Energy (EMA)", color="green")
+        plt.plot(episodes, smoothed_success, label="Success Rate (EMA)", color="orange")
+
+        plt.title("Convergence: Smoothed Reward, Energy, and Success Rate")
+        plt.xlabel("Episode")
+        plt.ylabel("Metric Value")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(filename)
+        plt.close()
+
 
 def create_sample_slices(
     topology: nx.Graph,
@@ -106,13 +136,14 @@ def create_sample_slices(
         slice_type = random.choice(valid_slice_types)
 
         if slice_type == SliceType.URLLC:
-            qos = QoS(qos_id=i, max_latency=50, edge_latency=25, min_bandwidth=10)
+            qos = QoS(qos_id=i, max_latency=2, edge_latency=0.8, min_bandwidth=100)
             vnf_cpu = random.randint(1, 2)
+        # Enhanced Mobile Broadband
         elif slice_type == SliceType.EMBB:
-            qos = QoS(qos_id=i, max_latency=100, min_bandwidth=20)
+            qos = QoS(qos_id=i, max_latency=5, min_bandwidth=1000)
             vnf_cpu = random.randint(1, 3)
         else:  # mMTC
-            qos = QoS(qos_id=i, max_latency=200, min_bandwidth=5)
+            qos = QoS(qos_id=i, max_latency=100, min_bandwidth=50)
             vnf_cpu = random.randint(1, 2)
 
         origin = random.choice(ran_nodes)
@@ -161,7 +192,7 @@ def train_dqn_agent(agent_load=None):
         gamma=0.99,
         epsilon_start=1.0,
         epsilon_end=0.05,  # Updated from 0.05 to 0.15 --> Trying to explore more (0.5)
-        epsilon_decay=0.995,
+        epsilon_decay=0.9995,
         buffer_size=20000,
         batch_size=128,
         target_update=200,
@@ -169,25 +200,12 @@ def train_dqn_agent(agent_load=None):
 
     if agent_load:
         agent.load(agent_load)
-
-    # Training parameters
-    n_episodes = 12000
+    n_episodes = 6000
     print_interval = 50
-    min_slices = 2
-    max_slices = 529  # --> pow(23, 2)
-
-    # visualizer = TopologyVisualizer(topology)
-    # visualizer.animate_slice_building([])
+    scheduler = SliceScheduler(strategy="curriculum", min_slices=2, max_slices=400)
 
     for episode in range(n_episodes):
-        # Dynamic difficulty adjustment
-        n_slices = min(
-            max_slices,
-            pow(min_slices + (episode // 500), 2),  # Increase every 500 episodes
-        )
-        # n_slices = int(min(max_slices, 2 + np.log1p(episode) * 10))
-        # n_slices = int(min(max_slices, 1 + np.log1p(episode) * 2))
-        # n_slices = 2
+        n_slices = scheduler.get_num_slices(episode)
         slices = create_sample_slices(topology, n_slices=n_slices)
 
         episode_reward = 0
@@ -265,22 +283,16 @@ def train_dqn_agent(agent_load=None):
                         )
                     ]
 
-            # Update metrics after slice placement
             if slice.path and len(slice.path) == len(slice.vnf_list):
-                successful_placements += 1
-                # if not slice.validate_vnf_placement(topology):
-                #     qos_violated += 1
+                if slice.validate_vnf_placement(topology):
+                    successful_placements += 1
+                else:
+                    qos_violated += 1
+            else:
+                qos_violated += 1
 
-            # Calculate energy for this slice
-            # episode_energy += sum(
-            #     topology.nodes[node]["energy_base"]
-            #     + topology.nodes[node]["energy_per_vcpu"]
-            #     * topology.nodes[node]["cpu_usage"]
-            #     for node in slice.path
-            # )
             episode_energy = env.total_energy_used(topology)
 
-        # Update metrics and agent's reward history
         metrics.update(
             episode_reward,
             episode_energy,
@@ -289,27 +301,32 @@ def train_dqn_agent(agent_load=None):
             successful_placements,
             n_slices,
         )
+        # print(
+        #     f"[DEBUG] Episode {episode}: Total Slices={n_slices} | "
+        #     f"Success={successful_placements} | QoS Violated={qos_violated} | Invalid={invalid_action_count}"
+        # )
+
         agent.update_reward_history(episode_reward)
 
-        # Adaptive exploration adjustment
+        # Adaptive exploration adjustment (if things are too bad then we go back to exploration hehe)
         if episode > 100 and successful_placements / n_slices < 0.5:
             agent.epsilon = min(0.7, agent.epsilon * 1.1)
 
-        # Logging
         if episode % print_interval == 0:
             avg_reward = np.mean(metrics.episode_rewards[-print_interval:])
             avg_energy = np.mean(metrics.energy_consumptions[-print_interval:])
-            success_rate = (
-                np.mean(metrics.successful_placements[-print_interval:]) / n_slices
-            )
+            total_success = sum(metrics.successful_placements[-print_interval:])
+            total_slices = sum(metrics.num_slices_per_episode[-print_interval:])
+            success_rate = total_success / max(total_slices, 1)
 
             print(
-                f"Episode {episode} | "
-                f"Avg Reward: {avg_reward:.2f} | "
-                f"Avg Energy: {avg_energy:.2f} | "
-                f"Invalid: {invalid_action_count} | "
-                f"QoS Violations: {qos_violated} | "
-                f"Success Rate: {success_rate:.2f} | "
+                f"Episode {episode:5d} | "
+                f"Slices: {n_slices:3d} | "
+                f"Avg Reward: {avg_reward:10.2f} | "
+                f"Avg Energy: {avg_energy:9.2f} | "
+                f"Invalid: {invalid_action_count:3d} | "
+                f"QoS Violations: {qos_violated:2d} | "
+                f"Success Rate: {success_rate:5.2f} | "
                 f"Epsilon: {agent.epsilon:.3f}"
             )
 
@@ -318,6 +335,7 @@ def train_dqn_agent(agent_load=None):
     agent.save("dqn_agent.pth")
     # agent.save("15k_episodes_dqn_agent.pth")
     metrics.plot()
+    metrics.plot_convergence_curve()
     print("Training completed. Model saved to dqn_agent.pth")
 
 

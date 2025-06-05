@@ -1,4 +1,5 @@
-from agents.dqn_agent import DQNAgent
+# from agents.dqn_agent import DQNAgent
+from agents.double_dueling_dqn_agent import D3QNAgent as DQNAgent
 from environment.vnf_env import VNFPlacementEnv
 from environment.barabasi_network_generator import NetworkTopologyGenerator
 import random

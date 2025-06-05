@@ -1,4 +1,3 @@
-# models/dqn.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -63,21 +62,3 @@ class DQN(nn.Module):
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
         return self.fc3(x)
-
-
-class ReplayBuffer:
-    def __init__(self, capacity: int):
-        self.buffer = deque(maxlen=capacity)
-
-    def push(
-        self, state: dict, action: int, reward: float, next_state: dict, done: bool
-    ):
-        self.buffer.append((state, action, reward, next_state, done))
-
-    def sample(self, batch_size: int) -> tuple:
-        batch = random.sample(self.buffer, min(len(self.buffer), batch_size))
-        states, actions, rewards, next_states, dones = zip(*batch)
-        return states, actions, rewards, next_states, dones
-
-    def __len__(self):
-        return len(self.buffer)

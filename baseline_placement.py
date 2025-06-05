@@ -4,7 +4,9 @@ from environment.vnf_env import VNFPlacementEnv
 from environment.network_slice import NetworkSlice
 from environment.barabasi_network_generator import NetworkTopologyGenerator
 from main import create_sample_slices
-from agents.dqn_agent import DQNAgent
+
+# from agents.dqn_agent import DQNAgent
+from agents.double_dueling_dqn_agent import D3QNAgent as DQNAgent
 import copy
 import numpy as np
 from topology_visualizer import TopologyVisualizer

@@ -3,11 +3,11 @@ import numpy as np
 from typing import Dict
 from collections import deque
 import random
-from models.dqn import DQN
+from models.dueling_dqn import DuelingDQN
 from models.replay_buffer import ReplayBuffer
 
 
-class DQNAgent:
+class D3QNAgent:
     def __init__(
         self,
         state_shape: tuple,
@@ -26,8 +26,8 @@ class DQNAgent:
         self.n_actions = n_actions
         self.eval_mode = eval_mode
 
-        self.policy_net = DQN(state_shape, n_actions).to(self.device)
-        self.target_net = DQN(state_shape, n_actions).to(self.device)
+        self.policy_net = DuelingDQN(state_shape, n_actions).to(self.device)
+        self.target_net = DuelingDQN(state_shape, n_actions).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
@@ -52,10 +52,8 @@ class DQNAgent:
             valid_q_values = {node: q_values[node] for node in valid_nodes}
 
         if self.eval_mode:
-            # Always pick the best action during evaluation
             return max(valid_q_values.items(), key=lambda x: x[1])[0]
 
-        # ε-greedy during training
         explore_prob = self.epsilon
         if len(valid_nodes) < 3:
             explore_prob = max(self.epsilon, 0.5)
@@ -73,65 +71,41 @@ class DQNAgent:
             self.batch_size
         )
 
-        # Convert to tensors
         rewards = torch.FloatTensor(rewards).to(self.device)
         dones = torch.FloatTensor(dones).to(self.device)
         actions = torch.LongTensor(actions).unsqueeze(1).to(self.device)
 
-        # Current Q values
         state_action_values = self.policy_net(states).gather(1, actions).squeeze(1)
 
-        # Expected Q values
         with torch.no_grad():
-            next_state_values = self.target_net(next_states).max(1)[0]
+            next_q_values = self.policy_net(next_states)
+            next_actions = next_q_values.argmax(1, keepdim=True)
+            next_q_target_values = (
+                self.target_net(next_states).gather(1, next_actions).squeeze(1)
+            )
             expected_state_action_values = (
-                rewards + (1 - dones) * self.gamma * next_state_values
+                rewards + (1 - dones) * self.gamma * next_q_target_values
             )
 
-        # Compute loss
         loss = torch.nn.functional.mse_loss(
             state_action_values, expected_state_action_values
         )
 
-        # Optimize
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(
-            self.policy_net.parameters(), 1.0
-        )  # Gradient clipping
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), 1.0)
         self.optimizer.step()
 
-        # Update epsilon
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
-        # Update target network
         if self.steps_done % self.target_update == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
+        self.steps_done += 1
         return loss.item()
 
     def update_reward_history(self, reward):
         self.last_100_rewards.append(reward)
-
-    def save(self, path: str):
-        torch.save(
-            {
-                "policy_state_dict": self.policy_net.state_dict(),
-                "target_state_dict": self.target_net.state_dict(),
-                "optimizer_state_dict": self.optimizer.state_dict(),
-                "epsilon": self.epsilon,
-                "steps_done": self.steps_done,
-            },
-            path,
-        )
-
-    def load(self, path: str):
-        checkpoint = torch.load(path)
-        self.policy_net.load_state_dict(checkpoint["policy_state_dict"])
-        self.target_net.load_state_dict(checkpoint["target_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        self.epsilon = checkpoint["epsilon"]
-        self.steps_done = checkpoint["steps_done"]
 
     def save(self, path: str):
         torch.save(
