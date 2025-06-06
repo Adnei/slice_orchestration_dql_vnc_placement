@@ -136,11 +136,11 @@ def create_sample_slices(
         slice_type = random.choice(valid_slice_types)
 
         if slice_type == SliceType.URLLC:
-            qos = QoS(qos_id=i, max_latency=2, edge_latency=0.8, min_bandwidth=100)
+            qos = QoS(qos_id=i, max_latency=4, edge_latency=0.8, min_bandwidth=100)
             vnf_cpu = random.randint(1, 2)
         # Enhanced Mobile Broadband
         elif slice_type == SliceType.EMBB:
-            qos = QoS(qos_id=i, max_latency=5, min_bandwidth=1000)
+            qos = QoS(qos_id=i, max_latency=10, min_bandwidth=1000)
             vnf_cpu = random.randint(1, 3)
         else:  # mMTC
             qos = QoS(qos_id=i, max_latency=100, min_bandwidth=50)
@@ -156,7 +156,7 @@ def create_sample_slices(
             network_slice.add_vnf(
                 VNF(
                     vnf_id=len(network_slice.vnf_list),
-                    delay=random.uniform(0.1, 0.5),
+                    delay=random.uniform(0.1, 0.3),
                     vnf_type=vnf_type,
                     vcpu_usage=vnf_cpu,
                     bandwidth_usage=max(
@@ -200,9 +200,9 @@ def train_dqn_agent(agent_load=None):
 
     if agent_load:
         agent.load(agent_load)
-    n_episodes = 6000
+    n_episodes = 5000
     print_interval = 50
-    scheduler = SliceScheduler(strategy="curriculum", min_slices=2, max_slices=400)
+    scheduler = SliceScheduler(strategy="log", min_slices=2, max_slices=124)
 
     for episode in range(n_episodes):
         n_slices = scheduler.get_num_slices(episode)
