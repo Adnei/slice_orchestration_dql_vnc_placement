@@ -170,7 +170,7 @@ def create_sample_slices(
     return slices
 
 
-def train_dqn_agent(agent_load=None):
+def train_dqn_agent(agent_load=None, agent_dst="updated_dqn_agent.pth"):
     metrics = TrainingMetrics()
 
     # Initialize network topology
@@ -200,9 +200,9 @@ def train_dqn_agent(agent_load=None):
 
     if agent_load:
         agent.load(agent_load)
-    n_episodes = 5000
+    n_episodes = 10000
     print_interval = 50
-    scheduler = SliceScheduler(strategy="log", min_slices=2, max_slices=124)
+    scheduler = SliceScheduler(strategy="log", min_slices=145, max_slices=200)
 
     for episode in range(n_episodes):
         n_slices = scheduler.get_num_slices(episode)
@@ -332,13 +332,14 @@ def train_dqn_agent(agent_load=None):
 
     # Save results
     # agent.save("heavy_training_15k_500slc.pth")
-    agent.save("dqn_agent.pth")
+    agent.save(agent_dst)
     # agent.save("15k_episodes_dqn_agent.pth")
     metrics.plot()
     metrics.plot_convergence_curve()
-    print("Training completed. Model saved to dqn_agent.pth")
+    print(f"Training completed. Model saved to {agent_dst}")
 
 
 if __name__ == "__main__":
     agent_load = sys.argv[1] if len(sys.argv) > 1 else None
-    train_dqn_agent(agent_load=agent_load)
+    agent_dst = sys.argv[2] if len(sys.argv) >= 2 else None
+    train_dqn_agent(agent_load=agent_load, agent_dst=agent_dst)
