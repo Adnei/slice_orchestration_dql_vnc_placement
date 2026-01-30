@@ -14,8 +14,9 @@ class SliceScheduler:
         elif self.strategy == "linear":
             return min(self.max_slices, self.min_slices + episode // 100)
 
+        # * 10 is the default
         elif self.strategy == "log":
-            return int(min(self.max_slices, self.min_slices + np.log1p(episode) * 10))
+            return int(min(self.max_slices, self.min_slices + np.log1p(episode) * 5))
 
         elif self.strategy == "curriculum":
             if episode < 3000:

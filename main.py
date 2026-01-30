@@ -136,6 +136,8 @@ def create_sample_slices(
         slice_type = random.choice(valid_slice_types)
 
         if slice_type == SliceType.URLLC:
+            # URLLC can be from 1 to 50ms depending on the application
+            # bandwidth can be around 10 Mbps to 100 Mbps
             qos = QoS(qos_id=i, max_latency=4, edge_latency=0.8, min_bandwidth=100)
             vnf_cpu = random.randint(1, 2)
         # Enhanced Mobile Broadband
@@ -174,7 +176,7 @@ def train_dqn_agent(agent_load=None, agent_dst="updated_dqn_agent.pth"):
     metrics = TrainingMetrics()
 
     # Initialize network topology
-    topology_generator = NetworkTopologyGenerator(n_nodes=50)
+    topology_generator = NetworkTopologyGenerator(n_nodes=15)
     topology_generator.draw()
     topology_generator.export_graph_to_pickle(filename="topology.pickle")
     topology = topology_generator.get_graph()
@@ -200,9 +202,9 @@ def train_dqn_agent(agent_load=None, agent_dst="updated_dqn_agent.pth"):
 
     if agent_load:
         agent.load(agent_load)
-    n_episodes = 10000
+    n_episodes = 5000
     print_interval = 50
-    scheduler = SliceScheduler(strategy="log", min_slices=145, max_slices=200)
+    scheduler = SliceScheduler(strategy="log", min_slices=1, max_slices=110)
 
     for episode in range(n_episodes):
         n_slices = scheduler.get_num_slices(episode)
@@ -341,5 +343,5 @@ def train_dqn_agent(agent_load=None, agent_dst="updated_dqn_agent.pth"):
 
 if __name__ == "__main__":
     agent_load = sys.argv[1] if len(sys.argv) > 1 else None
-    agent_dst = sys.argv[2] if len(sys.argv) >= 2 else None
+    agent_dst = sys.argv[2] if len(sys.argv) >= 2 else "updated_dqn_agent.pth"
     train_dqn_agent(agent_load=agent_load, agent_dst=agent_dst)
