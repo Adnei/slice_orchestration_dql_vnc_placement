@@ -176,7 +176,7 @@ def train_dqn_agent(agent_load=None, agent_dst="updated_dqn_agent.pth"):
     metrics = TrainingMetrics()
 
     # Initialize network topology
-    topology_generator = NetworkTopologyGenerator(n_nodes=15)
+    topology_generator = NetworkTopologyGenerator(n_nodes=30)
     topology_generator.draw()
     topology_generator.export_graph_to_pickle(filename="topology.pickle")
     topology = topology_generator.get_graph()
@@ -202,9 +202,9 @@ def train_dqn_agent(agent_load=None, agent_dst="updated_dqn_agent.pth"):
 
     if agent_load:
         agent.load(agent_load)
-    n_episodes = 5000
+    n_episodes = 8000
     print_interval = 50
-    scheduler = SliceScheduler(strategy="log", min_slices=1, max_slices=110)
+    scheduler = SliceScheduler(strategy="log", min_slices=1, max_slices=200)
 
     for episode in range(n_episodes):
         n_slices = scheduler.get_num_slices(episode)
